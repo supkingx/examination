@@ -1,6 +1,8 @@
-> 视频资料：https://www.bilibili.com/video/BV1Eb411P7bP?t=46
+# 一、java基础
 
-# 一、运算
+## 1、考虑输出结果
+
+视频资料：https://www.bilibili.com/video/BV1Eb411P7bP?t=46
 
 ```java
 public class Demo01 {
@@ -23,6 +25,50 @@ i=4
 j=1
 k=11
 ```
+
+## 2、集合源码分析
+
+视频：https://www.bilibili.com/video/BV1Kb411W75N?p=259
+
+### 2.1 ArrayList
+
+P529
+
+
+
+
+
+### 2.2 LinkedList
+
+P530
+
+
+
+### 2.3 Vector
+
+P531
+
+
+
+### 2.4HashMap
+
+P550
+
+
+
+## 3、反射
+
+P636
+
+
+
+## 4、动态代理
+
+
+
+
+
+
 
 # 二、单例模式
 
@@ -679,3 +725,337 @@ public class LoopIterate {
 - 迭代
   - 优点：代码运行效率好，因为时间只因循环次数增加而增加，而且没有额外的空间开销；
   - 缺点：代码可读性没有递归强，不够简洁
+
+# 六、成员变量与局部变量
+
+> - 就近原则
+> - 变量的分类
+>   - 成员变量：类变量、实例变量
+>   - 局部变量
+> - 非静态代码块的执行：每次创建实例对象都会执行
+> - 方法的调用规则：调用一次执行一次
+
+老规矩先上代码
+
+```java
+public class Demo02 {
+    static int s; // 成员变量--类变量
+    int i; // 成员变量--实例变量
+    int j; // 成员变量--实例变量
+
+    {
+        int i = 1; // 非静态代码块中的局部变量i
+        i++;
+        j++;
+        s++;
+    }
+
+    public void test(int j) { // 形参，局部变量,j
+        j++;
+        i++;
+        s++;
+    }
+
+    public static void main(String[] args) { // 形参，局部变量 args
+        Demo02 obj1 = new Demo02();  // 局部变量,obj1    i=0，j=1，s=1
+        Demo02 obj2 = new Demo02();  // 局部变量,obj2    i=0，j=1，s=2
+
+        obj1.test(10);  // i=1,j=1,s=3
+        obj1.test(20);  // i=2,j=1,s=4
+        obj2.test(30);  // i=1,j=1,s=5
+
+        System.out.println(obj1.i + "," + obj1.j + "," + obj1.s);
+        System.out.println(obj2.i + "," + obj2.j + "," + obj2.s);
+    }
+}
+
+运行结果：
+2,1,5
+1,1,5
+```
+
+
+
+## 1、成员变量与局部变量的区别
+
+### 1.1 申明位置
+
+- 局部变量：方法体 { } 中，形参，代码块 { } 中
+- 成员变量：类中方法外
+  - 类变量：有static修饰
+  - 实例变量：没有static修饰
+
+### 1.2 修饰符
+
+- 局部变量：final
+- 成员变量：public、protected、private、final、static、volatile、transient
+
+### 1.3 值存储位置
+
+- 局部变量：栈
+- 实例变量：堆
+- 类变量：方法区
+
+<img src="examination.assets/image-20210712210015091.png" alt="image-20210712210015091" style="zoom:50%;" />
+
+> 堆（heap）：存储对象、实例，和数组
+>
+> 栈（stack）：虚拟机栈。用于存储局部变量表。局部变量表存放了编译期可以知道长度的各种基本数据类型（boolean、byte、short、char、int、float、long、double）、对象引用（reference类型，存储对象在堆内存的首地址）。方法执行完自动释放。
+>
+> 方法区（Method Area）用于存储已被虚拟机加载的类信息、常量、静态常量、即时编译器编译后的代码等数据。
+
+例如Demo02 obj1 = new Demo02()，obj1在栈里面，new Demo02()在堆里面
+
+### 1.4 作用域
+
+- 局部变量：从申明出开始，到所属的 } 结束
+- 实例变量：在当前类中 `this.`(有时缺省)，在其他类中`对象名.`访问
+- 类变量：在当前类中`类名.`（有时缺省）访问，在其他类中`类名.`或`对象名.`访问
+
+### 1.5 生命周期
+
+- 局部变量：每一个线程，每一次调用执行都是新的生命周期
+- 实例变量：随着对象的创建而创建，随着对象的回收而消亡，每一个对象的实例变量都是独立的。
+- 类变量：随着类的初始化而初始化，随着类的卸载而消亡，该类的所有对象的类变量是共享的。
+
+<img src="examination.assets/image-20210712213811518.png" alt="image-20210712213811518" style="zoom:50%;" />
+
+# 七、Spring系列
+
+## 1、Sping Bean作用域
+
+> 默认情况下Sping只为每个在IOC容器里面声明的bean创建唯一一个实例，整个IOC容器范围内只能共享该实例，该作用域被称为singleton
+
+- singleton 在SpingIOC容器中仅存在一个bean实例，Bean以单实例的方式存在
+- prototype 每次调用getBean()时都会返回一个新的实例
+- request 每次Http请求都会创建一个新的Bean，该作用域仅适用于WebApplicationContext环境
+- session 同一个HTTP Session共享一个bean，不同的HTTP Session适用不同的Bean。该作用域仅适用于WebApplicationContext环境。
+
+## 2、IOC 
+
+> 控制反转，把创建对象的过程交给Spring进行管理
+
+
+
+
+
+
+
+
+
+## 3、AOP
+
+> 面向切面：不修改源代码进行功能的增强
+
+
+
+
+
+
+
+# 八、SpringMVC
+
+![image-20210712215743335](examination.assets/image-20210712215743335.png)
+
+# 九、redis
+
+## 1、使用场景
+
+| 数据类型 | 使用场景                                   |
+| -------- | :----------------------------------------- |
+| String   | 单纯的key，value                           |
+| Hash     | 可以用于存储用户信息                       |
+| List     | 实现最新消息的排行 ，可以模拟消息队列      |
+| Set      | 特殊之处：可以自动排重。不会存重复的       |
+| ZSet     | 以某一个条件为权重，进行排序，例如热搜排序 |
+
+
+
+## 2、持久化
+
+
+
+# 十、Mysql
+
+
+
+
+
+# 十一、JVM
+
+> https://www.bilibili.com/video/BV1PJ411n7xZ?spm_id_from=333.788.b_636f6d6d656e74.11
+>
+> JVM垃圾回收机制，GC发生在JVM哪部分，有几种GC，它们的算法是什么
+
+## 1、GC是什么
+
+GC是指分代收集算法
+
+- 在次数上频繁收集Young区的是Minor GC
+- 在次数上较少收集Old区   Full GC
+- 基本不动Perm区
+
+Young区是干嘛的？
+
+
+
+Old区是干嘛的？
+
+
+
+## 2、GC 发生在JVM哪部分
+
+> 发生在堆里
+
+<img src="examination.assets/image-20210712225800870.png" alt="image-20210712225800870" style="zoom:33%;" />
+
+
+
+
+
+## 3、GC 4大算法
+
+### 1、引用计数法
+
+有对象被引用就不回收
+
+缺点：每次对象赋值均要维护计数器，且计数器本身也有一定的消耗，较难处理循环引用
+
+JVM实现不采用这种方式了
+
+### 2、复制算法（Copying）
+
+年轻代中使用的是Minor GC，这种GC算法采用的是复制算法（Copying）
+
+#### 原理
+
+- 从根集合（GC Root）开始，通过Tracing从From中找到存活的对象，拷贝到To中。
+- From、To交换身份，下次内存分类从To开始
+
+#### 缺点
+
+需要双倍空间
+
+#### 优点
+
+没有标记清除过程，效率高
+
+没有内存碎片，可以实现快速内存分配（bump-the-pointer）
+
+### 3、标记清除（Mark-Sweep）
+
+老年代回收使用
+
+<img src="examination.assets/image-20210712225210793.png" alt="image-20210712225210793" style="zoom: 33%;" />
+
+
+
+
+
+### 4、标记压缩（Mark-Compact）
+
+老年代回收使用
+
+<img src="examination.assets/image-20210712225320150.png" alt="image-20210712225320150" style="zoom:50%;" />
+
+### 5、标记清除压缩（Mark-Sweep-Compact）
+
+两种算法(Mark-Sweep和Mark-Compact)结合使用的，先进行标记清除，清除一些产生一些碎片后再进行压缩
+
+老年代常用这种方式回收对象
+
+## 4、老年代和新生代
+
+
+
+
+
+# 十二、ElasticSearch
+
+## 1、ElasticSearch和solr的区别
+
+他们都是基于Lucene搜索服务器基础之上开发的一款优秀的高性能的企业级搜索服务器。【他们都是基于分词技术构建的倒排索引的方式进行查询】
+
+- 开发语言：java语言开发
+- Solr：2004年诞生
+- Es：2010年诞生
+- 当实时建立索引的时候，solr会产生io阻塞，而es则不会，es查询性能高于solr。
+- 在不断动态添加数据的时候，solr的检索效率会变得底下，而es则没有什么变化。
+- Solr利用zookeeper进行分布式管理，而es自身带有分布式系统管理功能。Solr一般都要部署到web服务器上，比如tomcat。启动tomcat的时候需要配置tomcat与solr的关联。【solr本质是一个动态web项目】
+- solr支持更多的格式数据【xml、json、csv】，而es仅支持json文件格式。
+- solr是传统搜索应用的有力解决方案，但是es更适用于新兴的实时搜索引用。
+  - 单纯的对已有的数据进行检索，solr的效率更好，高于es。
+- solr官网提供的功能更多，而es本身更注重核心功能，高级功能依赖于第三方插件
+
+## 2、solr
+
+<img src="examination.assets/image-20210712232616145.png" alt="image-20210712232616145" style="zoom:33%;" />
+
+# 十三、单点登录
+
+一处登录，到处使用，多使用在分布式系统中。
+
+
+
+
+
+# 十四、消息队列
+
+## 1、使用场景
+
+- 不同工程之间传递数据
+- 高并发下，来不及处理用户发出的请求。可以使用消息队列异步通信
+- 并行操作，好多个消费者都需要消费
+
+
+
+## 1、kafka
+
+
+
+
+
+## 2、RabbitMq
+
+
+
+# 十五、JUC
+
+> https://www.bilibili.com/video/BV1Kw411Z7dF?spm_id_from=333.788.b_636f6d6d656e74.12
+>
+> JUC-->java.util.concurrent   java并发包
+>
+> 并发：多个线程访问同一个资源：例如秒杀
+>
+> 并行：多个事情同时做：一边泡面一遍看书一边泡脚。。。。。
+
+
+
+
+
+# 十六、JMM
+
+> JMM（java内存模型java memory model）本身是一种抽象的概念，并不**真实存在**，它描述的是一组规则或规范，通过这组规范定义了程序中各个变量（包括实例字段，静态字段和构成数组对象的元素）的访问方式
+
+JMM关于同步的规定：
+
+1、线程解锁前，必须把共享变量的值刷回主内存。
+
+2、线程加锁前，必须读取主内存的最新值到自己的工作内存
+
+3、加锁解锁是同一把锁
+
+
+
+由于JVM运行程序的实体是线程，而每个线程创建时JVM都会为其创建一个工作内存（有些地方称之为栈空间），工作内存是每个线程的私有数据区域，而java内存模型中规定所有变量都存储在**主内存**，主内存是共享内存的区域，所有线程都可以访问，**但线程对变量的操作（读取/赋值等）都必须在自己的工作内存中进行，首先要将变量从主内存拷贝到自己的工作空间，然后对变量进行操作，操作完成后再将变量写回主内存**，不能直接操作主内存中的变量，各个线程中的工作内存中存储着主内存中的**变量副本拷贝**，因此不同的线程间无法直接访问对方的工作内存，线程间的通信(传值)必须通过主内存来完成，其简要访问过程如下。
+
+<img src="examination.assets/image-20210713232204292.png" alt="image-20210713232204292" style="zoom:33%;" />
+
+<img src="examination.assets/image-20210713232302262.png" alt="image-20210713232302262" style="zoom:33%;" />
+
+对于上述关键词的解释：
+
+- 主内存：就是常用的内存条
+- 每个线程从主内存拷贝到自己的工作空间中进行操作
+- 例如图中，t1线程将age=25拷贝到自己的工作空间后，将其改成37，然后放回主内存，此时主内存会变动通知其他线程
+
