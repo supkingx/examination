@@ -1037,13 +1037,21 @@ JVM实现不采用这种方式了
 
 > JMM（java内存模型java memory model）本身是一种抽象的概念，并不**真实存在**，它描述的是一组规则或规范，通过这组规范定义了程序中各个变量（包括实例字段，静态字段和构成数组对象的元素）的访问方式
 
-JMM关于同步的规定：
+**JMM关于同步的规定：**
 
 1、线程解锁前，必须把共享变量的值刷回主内存。
 
 2、线程加锁前，必须读取主内存的最新值到自己的工作内存
 
 3、加锁解锁是同一把锁
+
+**JMM 规范：**
+
+1、可见性
+
+2、原子性
+
+3、有序性
 
 
 
@@ -1057,5 +1065,201 @@ JMM关于同步的规定：
 
 - 主内存：就是常用的内存条
 - 每个线程从主内存拷贝到自己的工作空间中进行操作
-- 例如图中，t1线程将age=25拷贝到自己的工作空间后，将其改成37，然后放回主内存，此时主内存会变动通知其他线程
+- 例如图中，t1线程将age=25拷贝到自己的工作空间后，将其改成37，然后放回主内存，此时主内存会变动通知其他线程（**这就是可见性，对其他线程可见**）
 
+
+
+# 十七、volatile
+
+> volatile是java虚拟机提供的轻量级的同步机制，即削弱版本的synchronized，不保证原子性
+>
+> 有三个特性：保证可见性、不保证原子性、禁止指令重排
+
+## 1、保证可见性
+
+> 什么是可见性？看十七章的JMM最后的介绍。
+
+验证可见性，如下这段代码，线程"oneThread"对资源Data进行了值的修改，但是main线程并知道这件事情
+
+```java
+class Data {
+   int age = 10;
+
+    public void growUp() {
+        this.age = 18;
+    }
+}
+
+public class VolatileDemo {
+    public static void main(String[] args) {
+        Data data = new Data(); // 共享资源
+        new Thread(() -> {
+            System.out.println(Thread.currentThread().getName() + "-hello");
+            try {
+                TimeUnit.SECONDS.sleep(3);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            data.growUp();
+            System.out.println(Thread.currentThread().getName() + "-grow up:" + data.age);
+        }, "oneThread").start();
+
+        // 监听age值的是否被修改，如果一直是原值10，则继续循环
+        while (data.age == 10) {
+
+        }
+        // age被修改后跳出循环并输出
+        System.out.println(Thread.currentThread().getName() + ":" + data.age);
+    }
+}
+
+输出：
+oneThread-hello
+oneThread-grow up:18
+```
+
+上面那段代码中` System.out.println(Thread.currentThread().getName() + "main:" + data.age);`并没有被输出，因为共享资源age并没有加关键字`volatile`，此时的age并不具备**可见性**，当加了关键字volatile后，见如下代码
+
+```java
+class Data {
+    volatile int age = 10;
+
+    public void growUp() {
+        this.age = 18;
+    }
+}
+....main方法同上
+
+输出：
+oneThread-hello
+oneThread-grow up:18
+main:18
+```
+
+由于age加了关键字`volatile`此时main线程收到了age变更的通知，这就具备了**可见性**。
+
+## 2、不保证原子性
+
+> 原子性含义：不可分割，完整性，某个线程在做某个业务的时候，中间不可以被加塞或者被分割。需要整体完整，要么同时成功，要么同时失败。
+>
+> volatile不保证原子性
+
+### 2.1 不保证原子性实例
+
+```java
+class Data {
+    // 加了volatile后即可保证可见性
+    volatile int age = 10;
+//    int age = 10;
+
+    public void growUp() {
+        this.age = 18;
+    }
+
+    // 此时age加了volatile 关键字，volatile不保证原子性
+    public void addPlusPlus() {
+        age++;
+    }
+}
+public class AtomicityTest {
+    public static void main(String[] args) {
+        Data data = new Data();
+
+        // 20个线程
+        for (int i = 0; i < 20; i++) {
+            new Thread(() -> {
+                for (int j = 0; j < 1000; j++) {
+                    data.addPlusPlus();
+                }
+            }, "Thread-" + i).start();
+        }
+
+        // 默认有两个线程，一个是main线程，一个是GC线程
+        while (Thread.activeCount() > 2) {
+            // 使线程由执行态变成就绪态，让出cpu时间，在下一个线程执行的时候，此线程有可能被执行，也有可能不被执行
+            Thread.yield();
+        }
+        System.out.println(Thread.currentThread().getName() + "-" + data.age);
+    }
+}
+
+输出：
+main-18838
+```
+
+多次执行发现值并不一定，可见volatile并**不保证原子性**，由此也可见age++在多线程环境下是**非线程安全**的
+
+**分析age++为什么非线程安全**
+
+> age++在底层是**三步操作**：1、将主存中age的原始值拿到自己的工作空间，2、在自己的工作空间中对age进行修改，3、将修改后的age放回主存
+>
+> 这三步操作在多线程的情况下，当A线程修改age后放回主存并通知其他线程(使用了volatile关键字)的这一瞬间，线程B已经将自己修改的age放回主存了，即B还没来及收到主存发出的通知，B就将自己修改的age放回主存了。这就会造成age原来应该加两次的（AB线程各一次），实际上只加了一次。
+
+
+
+### 2.2 如何解决原子性
+
+1、加synchronized解决，如下
+
+```java
+public class Data {
+    // 加了volatile后即可保证可见性
+    volatile int age = 10;
+//    int age = 10;
+
+    public void growUp() {
+        this.age = 18;
+    }
+
+    // 此时age加了volatile 关键字，volatile不保证原子性,但可以用synchronized实现原子性
+    public synchronized void addPlusPlus() {
+        age++;
+    }
+}
+```
+
+2、使用AtomicInteger
+
+```java
+AtomicInteger num = new AtomicInteger(0);
+    public void addAtomic(){
+        num.getAndIncrement();
+    }
+```
+
+> 思考：为什么AtomicInteger可以保证原子性？？？
+>
+> 待后续章节解释
+
+
+
+## 3、禁止指令重排
+
+计算机在执行程序的时候，为了提高性能，编译器和处理器会对**指令做重排**，一般分为以下三种。
+
+<img src="examination.assets/image-20210714234948551.png" alt="image-20210714234948551" style="zoom:33%;" />
+
+- 单线程环境里面确保程序最终执行结果和代码顺序执行的结果一致。
+- 处理器在进行重排时必须要考虑指令之间的**数据依赖性**
+- 多线程环境下线程交替执行，由于编译器优化重排的存在，两个线程中使用的变量能否保住一致性是无法确定的，结果无法预测。
+
+**何为指令重排**，如下
+
+```java
+int x = 11;
+int y = 12;
+x = x+5;
+y = x * x;
+```
+
+java代码时上面的顺序，但是在高并发情况下，顺序可以是 1234、2134、1324
+
+但是4不可能排到第一个执行，这就是**数据依赖性**。
+
+
+
+**多线程情况下**
+
+<img src="examination.assets/image-20210715000917093.png" alt="image-20210715000917093" style="zoom:50%;" />
+
+可见x，y的值无法保证，所以要禁止指令重排
