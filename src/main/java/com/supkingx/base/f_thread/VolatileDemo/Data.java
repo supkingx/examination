@@ -27,6 +27,7 @@ public class Data {
 //        age++;
 //    }
 
+    // AtomicInteger 内部使用了volatile，保证了可见性和有序性
     AtomicInteger num = new AtomicInteger(0);
     public void addAtomic(){
         num.getAndIncrement();

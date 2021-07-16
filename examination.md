@@ -286,7 +286,7 @@ public class Singleton5 {
     private Singleton5() {
 
     }
-
+		// DCL (double check lock双端检索机制)，但是这种写法也不是最完美的写法，存在风险（指令重排），详细可见包 com.supkingx.base.f_thread.VolatileDemo，或者第十七章中关于volatile的介绍
     public static Singleton5 getSingleton() {
         // 外层的这个判断完全是为了性能考虑
         if (singleton == null) {
@@ -1053,7 +1053,7 @@ JVM实现不采用这种方式了
 
 3、有序性
 
-
+## 1、可见性介绍
 
 由于JVM运行程序的实体是线程，而每个线程创建时JVM都会为其创建一个工作内存（有些地方称之为栈空间），工作内存是每个线程的私有数据区域，而java内存模型中规定所有变量都存储在**主内存**，主内存是共享内存的区域，所有线程都可以访问，**但线程对变量的操作（读取/赋值等）都必须在自己的工作内存中进行，首先要将变量从主内存拷贝到自己的工作空间，然后对变量进行操作，操作完成后再将变量写回主内存**，不能直接操作主内存中的变量，各个线程中的工作内存中存储着主内存中的**变量副本拷贝**，因此不同的线程间无法直接访问对方的工作内存，线程间的通信(传值)必须通过主内存来完成，其简要访问过程如下。
 
@@ -1066,6 +1066,18 @@ JVM实现不采用这种方式了
 - 主内存：就是常用的内存条
 - 每个线程从主内存拷贝到自己的工作空间中进行操作
 - 例如图中，t1线程将age=25拷贝到自己的工作空间后，将其改成37，然后放回主内存，此时主内存会变动通知其他线程（**这就是可见性，对其他线程可见**）
+
+## 2、原子性
+
+参考下一章的AtomicInteger介绍
+
+# 3、有序性
+
+参考下一章volatile中有序性的介绍
+
+## 总结
+
+以上三点保证了线程的安全性。
 
 
 
@@ -1195,6 +1207,16 @@ main-18838
 >
 > 这三步操作在多线程的情况下，当A线程修改age后放回主存并通知其他线程(使用了volatile关键字)的这一瞬间，线程B已经将自己修改的age放回主存了，即B还没来及收到主存发出的通知，B就将自己修改的age放回主存了。这就会造成age原来应该加两次的（AB线程各一次），实际上只加了一次。
 
+**为什么volatile不能保证原子性**
+
+> 修改volatile分为四步：
+>
+> 1、读取volatile变量到local；2、修改变量值；3、local值写回主存；4、插入内存屏障，即lock指令，让其他线程可见。
+>
+> 这样就很容易看出来，前三步都是不安全的，取值和写回之间，不能保证没有其他线程修改。原子性需要锁来保证。
+>
+> 这也就是为什么，volatile只用来保证变量可见性，但不保证原子性。
+
 
 
 ### 2.2 如何解决原子性
@@ -1263,3 +1285,87 @@ java代码时上面的顺序，但是在高并发情况下，顺序可以是 123
 <img src="examination.assets/image-20210715000917093.png" alt="image-20210715000917093" style="zoom:50%;" />
 
 可见x，y的值无法保证，所以要禁止指令重排
+
+
+
+## 4、探究
+
+为什么volatile可是实现可见性和禁止指令重排
+
+> 首先抛出一个概念：内存屏障（Memory Barrier）又称内存栅栏，是一个CPU指令，它的作用有两个：
+>
+> 一是保证特定的执行顺序，二是保证某些变量的内存可见性
+
+volatile利用上面两个特性，实现了可见性和禁止指令重排
+
+由于编译器和处理器都能执行指令重排优化。如果在指令间插入一条Memory Barrier则会告诉编译器和CPU，不管什么指令都不能和这条Memory Barrier指令重排，也就是说通过插入内存屏障**禁止在内存屏障前后的指令执行重排优化**。内存屏障另外一个作用就是**强制刷出各种CPU的缓存数据**，因此任何CPU上的线程都能读取到这些数据的最新版本。
+
+具体如下图
+
+<img src="examination.assets/image-20210716100915747.png" alt="image-20210716100915747" style="zoom:33%;" />
+
+
+
+## 5、使用volatile的场景
+
+常见的单例模式可能存在的**风险**，话不多说，一切见代码
+
+```java
+public class SingletonDemo2 {
+    private static SingletonDemo2 singletonDemo = null;
+
+    private SingletonDemo2() {
+        // 对象常见的时候，构造器执行
+        System.out.println(Thread.currentThread().getName() + "-我是构造器!");
+    }
+
+    // DCL (double check lock双端检索机制)
+    // 这种写法有风险（指令重排），在高并发下出现的概率可能是千万分之一
+    /**
+     * 至于为什么会出现上述所说的情况，是因为某一个线程执行到第一次检测，读取到的instance不为null时，instance的引用对象可能没有完成初始化。
+     * instance=new SingletonDemo();可以分为以下三个步骤；
+     * 1、Memory = allocate() // 分配对象内存空间
+     * 2、instance(Memory) // 初始化对象
+     * 3、instance = Memory；设置instance指向刚分配的内存地址，此时instance！=null
+     * 上面的三步的2、3并没有数据依赖关系，所以当指令重排的时候，步骤会变成1、3、2，此时
+     * 当A线程走完第一步时，此时B线程走到下面代码的if(null == singletonDemo)就是false，则会直接返回null（因为此时实例并没有初始化完成）
+     * @return
+     */
+    public static SingletonDemo2 getSingletonDemo() {
+        if (null == singletonDemo) {
+            synchronized (SingletonDemo2.class) {
+                if (null == singletonDemo) {
+                    singletonDemo = new SingletonDemo2();
+                }
+            }
+        }
+        return singletonDemo;
+    }
+
+    public static void main(String[] args) {
+        // 单线程环境下，只会创建一个对象，只会执行一次构造器
+//        System.out.println(SingletonDemo.getSingletonDemo() == SingletonDemo.getSingletonDemo());
+
+        // 多线程情况下，一切皆有肯
+        for (int i = 0; i < 20; i++) {
+            new Thread(() -> {
+                SingletonDemo2.getSingletonDemo();
+            }).start();
+        }
+    }
+}
+```
+
+如上所述会出现指令重排的风险，所以需要加上volatile
+
+```java
+private static volatile SingletonDemo3 singletonDemo = null;
+```
+
+至此，volatile避免指令重排，synchronized保证了原子性，完美
+
+## 6、总结
+
+工作内存与主内存同步延迟现象导致的可见性问题，可以使用synchronized或volatile关键字解决，它们都可以使一个线程修改后的变量立即对其他线程可见。
+
+对于指令重排导致的可见性问题和有序性问题，可以利用volatile关键字解决，因为volatile的另外一个作用就是禁止指令重排
