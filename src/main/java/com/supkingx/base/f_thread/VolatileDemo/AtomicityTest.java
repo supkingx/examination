@@ -26,10 +26,6 @@ public class AtomicityTest {
             Thread.yield();
         }
 
-//        while (data.num.get() == 0) {
-//
-//        }
-
         System.out.println(Thread.currentThread().getName() + "-" + data.age);
         System.out.println(Thread.currentThread().getName() + "-" + data.num);
     }
