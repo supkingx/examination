@@ -286,7 +286,7 @@ public class Singleton5 {
     private Singleton5() {
 
     }
-
+		// DCL (double check lock双端检索机制)，但是这种写法也不是最完美的写法，存在风险（指令重排），详细可见包 com.supkingx.base.f_thread.VolatileDemo，或者第十七章中关于volatile的介绍
     public static Singleton5 getSingleton() {
         // 外层的这个判断完全是为了性能考虑
         if (singleton == null) {
@@ -905,7 +905,7 @@ Old区是干嘛的？
 
 ## 2、GC 发生在JVM哪部分
 
-> 发生在堆里
+> 发生在堆里，堆就是内存里面
 
 <img src="examination.assets/image-20210712225800870.png" alt="image-20210712225800870" style="zoom:33%;" />
 
@@ -1053,7 +1053,7 @@ JVM实现不采用这种方式了
 
 3、有序性
 
-
+## 1、可见性介绍
 
 由于JVM运行程序的实体是线程，而每个线程创建时JVM都会为其创建一个工作内存（有些地方称之为栈空间），工作内存是每个线程的私有数据区域，而java内存模型中规定所有变量都存储在**主内存**，主内存是共享内存的区域，所有线程都可以访问，**但线程对变量的操作（读取/赋值等）都必须在自己的工作内存中进行，首先要将变量从主内存拷贝到自己的工作空间，然后对变量进行操作，操作完成后再将变量写回主内存**，不能直接操作主内存中的变量，各个线程中的工作内存中存储着主内存中的**变量副本拷贝**，因此不同的线程间无法直接访问对方的工作内存，线程间的通信(传值)必须通过主内存来完成，其简要访问过程如下。
 
@@ -1066,6 +1066,18 @@ JVM实现不采用这种方式了
 - 主内存：就是常用的内存条
 - 每个线程从主内存拷贝到自己的工作空间中进行操作
 - 例如图中，t1线程将age=25拷贝到自己的工作空间后，将其改成37，然后放回主内存，此时主内存会变动通知其他线程（**这就是可见性，对其他线程可见**）
+
+## 2、原子性
+
+参考下一章的AtomicInteger介绍
+
+## 3、有序性
+
+参考下一章volatile中有序性的介绍
+
+## 总结
+
+以上三点保证了线程的安全性。
 
 
 
@@ -1195,6 +1207,16 @@ main-18838
 >
 > 这三步操作在多线程的情况下，当A线程修改age后放回主存并通知其他线程(使用了volatile关键字)的这一瞬间，线程B已经将自己修改的age放回主存了，即B还没来及收到主存发出的通知，B就将自己修改的age放回主存了。这就会造成age原来应该加两次的（AB线程各一次），实际上只加了一次。
 
+**为什么volatile不能保证原子性**
+
+> 修改volatile分为四步：
+>
+> 1、读取volatile变量到local；2、修改变量值；3、local值写回主存；4、插入内存屏障，即lock指令，让其他线程可见。
+>
+> 这样就很容易看出来，前三步都是不安全的，取值和写回之间，不能保证没有其他线程修改。原子性需要锁来保证。
+>
+> 这也就是为什么，volatile只用来保证变量可见性，但不保证原子性。
+
 
 
 ### 2.2 如何解决原子性
@@ -1263,3 +1285,317 @@ java代码时上面的顺序，但是在高并发情况下，顺序可以是 123
 <img src="examination.assets/image-20210715000917093.png" alt="image-20210715000917093" style="zoom:50%;" />
 
 可见x，y的值无法保证，所以要禁止指令重排
+
+
+
+## 4、探究
+
+为什么volatile可是实现可见性和禁止指令重排
+
+> 首先抛出一个概念：内存屏障（Memory Barrier）又称内存栅栏，是一个CPU指令，它的作用有两个：
+>
+> 一是保证特定的执行顺序，二是保证某些变量的内存可见性
+
+volatile利用上面两个特性，实现了可见性和禁止指令重排
+
+由于编译器和处理器都能执行指令重排优化。如果在指令间插入一条Memory Barrier则会告诉编译器和CPU，不管什么指令都不能和这条Memory Barrier指令重排，也就是说通过插入内存屏障**禁止在内存屏障前后的指令执行重排优化**。内存屏障另外一个作用就是**强制刷出各种CPU的缓存数据**，因此任何CPU上的线程都能读取到这些数据的最新版本。
+
+具体如下图
+
+<img src="examination.assets/image-20210716100915747.png" alt="image-20210716100915747" style="zoom:33%;" />
+
+
+
+## 5、使用volatile的场景
+
+常见的单例模式可能存在的**风险**，话不多说，一切见代码
+
+```java
+public class SingletonDemo2 {
+    private static SingletonDemo2 singletonDemo = null;
+
+    private SingletonDemo2() {
+        // 对象常见的时候，构造器执行
+        System.out.println(Thread.currentThread().getName() + "-我是构造器!");
+    }
+
+    // DCL (double check lock双端检索机制)
+    // 这种写法有风险（指令重排），在高并发下出现的概率可能是千万分之一
+    /**
+     * 至于为什么会出现上述所说的情况，是因为某一个线程执行到第一次检测，读取到的instance不为null时，instance的引用对象可能没有完成初始化。
+     * instance=new SingletonDemo();可以分为以下三个步骤；
+     * 1、Memory = allocate() // 分配对象内存空间
+     * 2、instance(Memory) // 初始化对象
+     * 3、instance = Memory；设置instance指向刚分配的内存地址，此时instance！=null
+     * 上面的三步的2、3并没有数据依赖关系，所以当指令重排的时候，步骤会变成1、3、2，此时
+     * 当A线程走完第一步时，此时B线程走到下面代码的if(null == singletonDemo)就是false，则会直接返回null（因为此时实例并没有初始化完成）
+     * @return
+     */
+    public static SingletonDemo2 getSingletonDemo() {
+        if (null == singletonDemo) {
+            synchronized (SingletonDemo2.class) {
+                if (null == singletonDemo) {
+                    singletonDemo = new SingletonDemo2();
+                }
+            }
+        }
+        return singletonDemo;
+    }
+
+    public static void main(String[] args) {
+        // 单线程环境下，只会创建一个对象，只会执行一次构造器
+//        System.out.println(SingletonDemo.getSingletonDemo() == SingletonDemo.getSingletonDemo());
+
+        // 多线程情况下，一切皆有肯
+        for (int i = 0; i < 20; i++) {
+            new Thread(() -> {
+                SingletonDemo2.getSingletonDemo();
+            }).start();
+        }
+    }
+}
+```
+
+如上所述会出现指令重排的风险，所以需要加上volatile
+
+```java
+private static volatile SingletonDemo3 singletonDemo = null;
+```
+
+至此，volatile避免指令重排，synchronized保证了原子性，完美
+
+## 6、总结
+
+工作内存与主内存同步延迟现象导致的可见性问题，可以使用synchronized或volatile关键字解决，它们都可以使一个线程修改后的变量立即对其他线程可见。
+
+对于指令重排导致的可见性问题和有序性问题，可以利用volatile关键字解决，因为volatile的另外一个作用就是禁止指令重排
+
+# 十八、CAS
+
+> 比较、交换（compareAndSet），它是一条cpu并发原语
+>
+> 它的功能是判断内存某个位置的值是否为预期值，如果是则更改为新的值，这个过程是原子的
+
+## 1、AtomicInteger实例
+
+```java
+public class CASDemo {
+    public static void main(String[] args) {
+        AtomicInteger i = new AtomicInteger(0);
+        // 先比较，如果是i等于期望值0，则将其置为2021
+        System.out.println(i.compareAndSet(0,2021));
+      
+        System.out.println(i.getAndIncrement());
+    }
+}
+```
+
+<img src="examination.assets/image-20210716232721506.png" alt="image-20210716232721506" style="zoom:33%;" />
+
+T1拿到了5，并改成了2019，想要写回主存，此时先将自己的期望值5，和主存的值进行比较，如果主存也是5，则对其进行更新。
+
+## 2、CAS底层原理
+
+> 思考i.getAndIncrement()，为什么没有加synchronized也能保证原子性
+
+> CAS并发原语体现在JAVA语言中就是sun.misc.Unsafe类中的各个方法。调用UnSafe类中的CAS方法，JVM会帮我们实现CAS汇编指令。这是一种完全依赖于硬件的功能，通过它实现了原子操作。再次强调，由于CAS是一种系统原语，原语属于操作系统用语范畴，是由若干条指令组成的，用于完成某个功能的一个过程，并且原语的执行必须是连续的，在执行过程中不允许被中断，也就是说CAS是一条CPU的原子指令，不糊造成所谓的数据不一致问题。
+
+接下来以i.getAndIncrement为例进行讲解
+
+getAndIncrement()底层实现是用的unsafe.getAndAddInt
+
+```java
+ public final int getAndIncrement() {
+        return unsafe.getAndAddInt(this, valueOffset, 1);
+    }
+```
+
+```java
+// var1 当前对象本身，var2位移偏移量，var4需要增加的值，var5 内存中的真是值
+public final int getAndAddInt(Object var1, long var2, int var4) {
+    int var5;
+    do {
+        var5 = this.getIntVolatile(var1, var2);
+    } while(!this.compareAndSwapInt(var1, var2, var5, var5 + var4));
+
+    return var5;
+}
+```
+
+<img src="examination.assets/image-20210717191410548.png" alt="image-20210717191410548" style="zoom:33%;" />
+
+- Unsafe
+
+是CAS的核心类，由于java方法无法直接访问底层系统，需要通过本地（native）方法来访问，Unsafe相当于一个后门，基于该类可以直接操作特定内存的数据。Unsafe类存在于sun.misc包中，其内部方法操作可以像C的指针一样直接操作内存，因为java中CAS操作的执行依赖于Unsafe类的方法 。
+
+**unsafe中所有的方法都是native修饰的，也就是说unsafe类中的方法都可以直接调用操作系统底层资源执行相应的任务。**
+
+- valueOffset
+
+当前对象的内存偏移量，在static块中获取
+
+- value
+
+AtomicInteger i= new AtomicInteger(value)；这里value被volatile修饰，对value的修改其他线程是可见的。
+
+-  var5 = this.getIntVolatile(var1, var2);
+
+表示获取当前对象的所在位移偏移量的值，相当于拷贝主存中的值到自己的工作内存中。
+
+- this.compareAndSwapInt(var1, var2, var5, var5 + var4)
+
+当前对象的值如果和var5一样，则var5+var4，即当前值＋1
+
+- while(!this.compareAndSwapInt(var1, var2, var5, var5 + var4));
+
+当前对象的值如果和期望值一样就跳出循环，否则**不停的循环**对比快照值和当前对象的值
+
+<img src="examination.assets/image-20210717200006086.png" alt="image-20210717200006086" style="zoom:33%;" />
+
+## 3、Unsafe
+
+Unsafe类中的compareAndSwapInt，是一个本地方法，该方法的实现位于unsafe.cpp中，了解即可。
+
+<img src="examination.assets/image-20210717200706495.png" alt="image-20210717200706495" style="zoom:33%;" />
+
+## 4、CAS的缺点
+
+- 循环时间开销大
+- 只能保证一个共享变量的原子操作，当需要对多个共享变量操作时，循环CAS就无法保证操作的原子性，需要加锁来保证。
+- 引出来的ABA问题（什么是ABA问题，后面讨论）
+
+## 5、ABA问题
+
+> 狸猫换太子
+>
+> CAS算法实现的一个重要前提需要取出内存中的某个时刻的数据并在当下时刻比较并替换，那么这个时间差类会导致数据的变化。
+
+### （1）问题描述
+
+以下两个流程结合一起看
+
+线程A: 从内存中取出A ---------------------------------------------------------->进行CAS操作，发现内存中还是A，然后one操作成功。
+线程B: 从内存中取出A -----------> 将A变成了B ----------> 将B变成了A
+
+上述线程A确实CAS操作成功了，但是**此A非彼A**了。
+
+对于只关心结果不关心过程的场景，无所谓。但是对于注重过程的场景，就有问题了
+
+## 6、解决ABA问题
+
+理解原子应用+新增一种机制，那就是修改版本号（类似于时间戳）
+
+线程A: 值A version:1 ----------------------------------------------->此时想要操作，先CAS，期望值A,符合。然后提交修改后的值C version:2，发现version的2弱于当前的version:3，提交失败
+线程B: 值A varsion:1 -------->修改为值B version:2 ------->修改为值A verison:3
+
+上诉过程就是加了版本号控制的结果，解决了ABA问题。
+
+### （1）ABA问题的产生演示
+
+```java
+public class ABADemo {
+ static AtomicReference<Integer> atomicReference = new AtomicReference<>(100);   
+  public static void main(String[] args) {
+          new Thread(()->{
+              System.out.println(atomicReference.compareAndSet(100,101)+"--"+atomicReference.get());
+              System.out.println(atomicReference.compareAndSet(101,100)+"--"+atomicReference.get());
+          },"A").start();
+
+          // B 线程并不知道A的过程发生了什么，只知道A的值是100，并不知道A中途变成过101
+          new Thread(()->{
+              try {
+                  Thread.sleep(1000);
+              } catch (InterruptedException e) {
+                  e.printStackTrace();
+              }
+              System.out.println(atomicReference.compareAndSet(100,2021)+"--"+atomicReference.get());
+          },"B").start();
+      }
+  }
+}
+```
+
+### （2）ABA问题的解决
+
+```java
+public class ABADemo2 {
+
+    static AtomicStampedReference<Integer> atomicStampedReference = new AtomicStampedReference<>(100, 1);
+
+    public static void main(String[] args) {
+        new Thread(() -> {
+            int stamp = atomicStampedReference.getStamp();
+            System.out.println(Thread.currentThread().getName() + "-第一次版本号：" + stamp);
+            // 暂停一秒A线程，等B线程拿到这个版本号
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            atomicStampedReference.compareAndSet(100, 101, atomicStampedReference.getStamp(), atomicStampedReference.getStamp() + 1);
+            System.out.println(Thread.currentThread().getName() + "-第二次版本号：" + atomicStampedReference.getStamp());
+            atomicStampedReference.compareAndSet(101, 100, atomicStampedReference.getStamp(), atomicStampedReference.getStamp() + 1);
+            System.out.println(Thread.currentThread().getName() + "-第三次版本号：" + atomicStampedReference.getStamp());
+        }, "A").start();
+
+        new Thread(() -> {
+            int stamp = atomicStampedReference.getStamp();
+            System.out.println(Thread.currentThread().getName() + "-第一次版本号：" + stamp);
+            // 暂停三秒B线程，保证上面的A线程完成一次ABA操作
+            try {
+                Thread.sleep(3000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            boolean result = atomicStampedReference.compareAndSet(100, 2021, stamp, stamp + 1);
+            System.out.println(Thread.currentThread().getName() + "修改成功与否:" + result + "第二次版本号:" + atomicStampedReference.getStamp());
+            System.out.println(Thread.currentThread().getName() + "-当前实际最新值:"+atomicStampedReference.getReference());
+        }, "B").start();
+    }
+}
+```
+
+输出结果：
+
+```
+A-第一次版本号：1
+B-第一次版本号：1
+A-第二次版本号：2
+A-第三次版本号：3
+
+B修改成功与否:false,第二次版本号:3
+B-当前实际最新值:100
+```
+
+可以看到，上述代码解决了ABA问题，加入版本号(时间戳)控制之后，当B的更新后提交时(100改成2021，时间戳2)，没有提交成功，因为此时时间戳已经是3了，2小于3，不给执行。所以当前的公共资源值atomicStampedReference还是100。
+
+当修改上诉代码如下：
+
+```java
+boolean result = atomicStampedReference.compareAndSet(100, 2021, stamp + 2, stamp + 1);
+```
+
+修改代码如下，期望的时间戳是stamp+2,即3（与上面的最新时间戳保持一致）时，即可需改成功。
+
+
+
+## 总结
+
+1、为什么用cas而不用synchronized
+
+synchronized：同一时段只允许有一个线程来访问，一直性得到了保证，但并发性下降。
+
+cas：没有加锁，通过比较来确认是否修改数据，即提供 了一致性，也提高了并发性
+
+2、Unsafe类+CAS思想是什么
+
+自旋，什么是自旋？？？后期学习。
+
+3、CAS简单理解
+
+比较当前工作内存中的值和主内存中的值，如果相同则执行操作，否则继续比较知道主内存和工作内存中的值一致为止。
+
+4、CAS应用
+
+CAS有三个操作数，内存值V，旧的预期值A，需要修改的更新值B。当且仅当预期值A和内存值V相同时，将内存值V修改为B，否则什么都不做。
+

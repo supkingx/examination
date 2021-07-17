@@ -13,6 +13,7 @@ public class Singleton5 {
 
     }
 
+    // DCL (double check lock双端检索机制)，但是这种写法也不是最完美的写法，存在风险（指令重排），详细可见包 com.supkingx.base.f_thread.VolatileDemo
     public static Singleton5 getSingleton() {
         // 外层的这个判断完全是为了性能考虑
         if (singleton == null) {

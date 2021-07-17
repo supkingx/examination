@@ -23,9 +23,9 @@ public class VisibilityTest {
         }, "oneThread").start();
 
         // 监听age值的是否被修改，如果一直是原值10，则继续循环
-//        while (data.age == 10) {
-//
-//        }
+        while (data.age == 10) {
+
+        }
         // age被修改后跳出循环并输出
         System.out.println(Thread.currentThread().getName() + ":" + data.age);
     }
