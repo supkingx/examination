@@ -1,7 +1,7 @@
-package com.supkingx.base.h_proxy.dynamicproxy;
+package com.supkingx.base.i_proxy.dynamicproxy;
 
-import com.supkingx.base.h_proxy.staticproxy.ClothFactory;
-import com.supkingx.base.h_proxy.staticproxy.SupClothFactory;
+import com.supkingx.base.i_proxy.staticproxy.ClothFactory;
+import com.supkingx.base.i_proxy.staticproxy.SupClothFactory;
 
 /**
  * @description: 动态代理

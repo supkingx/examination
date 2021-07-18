@@ -1,4 +1,4 @@
-package com.supkingx.base.h_proxy.dynamicproxy;
+package com.supkingx.base.i_proxy.dynamicproxy;
 
 /**
  * @description: 接口

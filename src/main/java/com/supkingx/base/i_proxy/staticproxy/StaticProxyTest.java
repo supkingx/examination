@@ -1,4 +1,4 @@
-package com.supkingx.base.h_proxy.staticproxy;
+package com.supkingx.base.i_proxy.staticproxy;
 
 /**
  * @description: 静态代理举例
