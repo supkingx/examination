@@ -58,15 +58,503 @@ P550
 
 ## 3、反射
 
-P636
+### (1) 概述
+
+- 反射被视为动态语言的关键，反射机制允许程序在执行期间借助于Reflection API取得任何类的内部信息，并能直接操作任意对象的内部属性及方法。
+- 加载完类后，在堆内存的方法区中就会产生一个CLass类型的对象，这个对象就包含了类的结构信息。我们可以通过这个对象看到类的结构。这个对象就像一面镜子，透过这个镜子看到类的结构，所以，我们形象的称之为：反射。
+
+<img src="examination.assets/image-20210718134310333.png" alt="image-20210718134310333" style="zoom:33%;" />
 
 
 
-## 4、动态代理
+<img src="examination.assets/image-20210718134419464.png" alt="image-20210718134419464" style="zoom:33%;" />
+
+<img src="examination.assets/image-20210718134650913.png" alt="image-20210718134650913" style="zoom:33%;" />
+
+
+
+话不多说，上代码
+
+```java
+public class Person {
+    private int age;
+    private String name;
+
+    public Person(int age, String name) {
+        this.age = age;
+        this.name = name;
+    }
+
+    public int getAge() {
+        return age;
+    }
+
+    public void setAge(int age) {
+        this.age = age;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void show(){
+        System.out.println("秀一下");
+    }
+
+    @Override
+    public String toString() {
+        return "Person{" +
+                "age=" + age +
+                ", name='" + name + '\'' +
+                '}';
+    }
+}
+```
+
+```java
+public class Demo01 {
+    public static void main(String[] args) throws Exception {
+        Class<Person> personClass = Person.class;
+        Constructor<Person> constructor = personClass.getConstructor(int.class,String.class);
+        // 创建了这个对象
+        Person king = constructor.newInstance( 12,"king");
+
+        System.out.println(king);
+        // 获取class中的这个字段
+        Field age = personClass.getDeclaredField("age");
+        // 无视private
+        age.setAccessible(true);
+        // 给king对象中的age字段设置参数
+        age.set(king,100);
+        System.out.println(king);
+        age.setAccessible(false);
+
+        // 获取class中的show方法
+        Method show = personClass.getDeclaredMethod("show");
+        // 执行king对象中的show方法
+        show.invoke(king);
+    }
+}
+```
+
+疑问：
+
+1、通过直接new的方式或反射的方式都可以直接调用公共的结构，开发中到底用哪个？
+
+> 建议直接用new的方式
+
+2、什么时候用到反射
+
+> 编译的时候不确定用哪个对象，反射特征：动态性，例如动态代理
+
+3、反射机制与面向对象中的封装性是不是矛盾的？如果看待两个技术？
+
+> 不矛盾。反射解决的问题是怎么调用，封装解决的问题是：哪些方法建议使用，哪些方法不建议使用
+
+
+
+### (2) 理解Class类并获取Class实例（掌握）
+
+1、类的加载过程
+
+程序经过javac命令后，会生成一个或多个字节码文件（.class），接着我们使用java命令来对某个字节码文件进行解释运行，相当于将某个字节码文件加载到内存中。此过程称之为加载。加载到内存中的类，我们称之为运行时类，此运行时类，就作为Class的一个实例。
+
+换句话说，Class的实例就对应着加载到内存中的一个运行时类
+
+
+
+2、获取CLass实例
+
+- 方式一：调用运行时类的属性：class
+
+```java
+Class<Person> personClass = Person.class;
+```
+
+- 方式二：通过运行时类的对象,调用getClass()
+
+```java
+Person person = new Person();
+Class aClass = person.getClass();
+```
+
+- 方式三：调用Class的静态方法，forName(String classPath)
+
+```java
+Class clazz = Class.forName("com.supkingx.base.h_reflect.Person");
+```
+
+- 方式四：使用类的加载器
+
+```java
+ClassLoader classLoader = Demo01.class.getClassLoader();
+Class aClass1 = classLoader.loadClass("com.supkingx.base.h_reflect.Person");
+```
+
+### (3) 类的加载与ClassLoader的理解（了解）
+
+<img src="examination.assets/image-20210718152022536.png" alt="image-20210718152022536" style="zoom:33%;" />
+
+<img src="examination.assets/image-20210718154642698.png" alt="image-20210718154642698" style="zoom:33%;" />
+
+<img src="examination.assets/image-20210718162450866.png" alt="image-20210718162450866" style="zoom:33%;" />
+
+```java
+// 方式四：使用类的加载器
+ClassLoader classLoader = Demo01.class.getClassLoader();
+Class aClass1 = classLoader.loadClass("com.supkingx.base.h_reflect.Person");
+```
+
+```java
+public class Test01 {
+    public static void main(String[] args) throws ClassNotFoundException {
+        // 获取系统类加载器
+        ClassLoader classLoader = Test01.class.getClassLoader();
+        Class aClass1 = classLoader.loadClass("com.supkingx.base.h_reflect.Person");
+        System.out.println(aClass1);
+        System.out.println(classLoader);
+        // 通过系统类加载器的getParent()，获取扩展类加载器
+        System.out.println(classLoader.getParent());
+        // 通过扩展类加载器的getParent()，获取引导类加载器
+        // 引导类加载器主要负责java的核心类库，无法加载自定义类
+        System.out.println(classLoader.getParent().getParent());
+    }
+}
+```
+
+读取配置文件
+
+```java
+public class Test02 {
+    public static void main(String[] args) throws IOException {
+        Properties properties = new Properties();
+        // 读取配置方式一
+//        FileInputStream fileInputStream = new FileInputStream("/Users/superking/Documents/project/examination/src/main/resources/jdbc.properties");
+       // 方式二：
+        InputStream resourceAsStream = Test02.class.getClassLoader().getResourceAsStream("jdbc.properties");
+        properties.load(resourceAsStream);
+        String user = (String) properties.get("user");
+        String password = (String) properties.get("password");
+        System.out.println("user:" + user + "," + "password:" + password);
+
+    }
+}
+```
+
+
+
+### (4) 创建运行时类的对象(掌握)
+
+```java
+public class Demo02 {
+    public static void main(String[] args) throws IllegalAccessException, InstantiationException {
+        Class<Person> personClass = Person.class;
+        // 调用此方法创建运行时类的对象（内部调用运行实时类的空参构造器）
+        // 想要用此方法创建，必须提供public权限的空参构造器
+
+        // 在javabean中要求提供一个public的空参构造器，原因：
+        // 便于反射创建运行时类的对象
+        // 便于子类继承此运行时类，默认调用super()时，保证父类有次构造器
+
+        Person person = personClass.newInstance();
+        System.out.println(person);
+    }
+}
+```
+
+以下创建运行时类的方式用的比较少
+
+```java
+Class<Person> personClass = Person.class;
+Constructor<Person> constructor = personClass.getConstructor(int.class,String.class);
+// 创建了这个对象
+Person king = constructor.newInstance( 12,"king");
+```
+
+
+
+### (5) 获取运行时类的完整结构（了解）
+
+参考代码：包package com.supkingx.base.h_reflect.Test 下的 Test01---Test06
+
+### (6) 调用运行时类的指定结构（掌握）
+
+```java
+public class FieldTest {
+    public static void main(String[] args) throws NoSuchFieldException, IllegalAccessException, InstantiationException {
+        Class<Person> personClass = Person.class;
+        Person person = personClass.newInstance();
+        Field nameField = personClass.getDeclaredField("name");
+        nameField.setAccessible(true);
+        nameField.set(person,"king");
+        System.out.println(person);
+
+        String name = (String)nameField.get(person);
+        System.out.println(name);
+    }
+}
+
+```
+
+```java
+public class MethodTest {
+    public static void main(String[] args) throws IllegalAccessException, InstantiationException, NoSuchFieldException, NoSuchMethodException, InvocationTargetException {
+        Class<Person> personClass = Person.class;
+        Person person = personClass.newInstance();
+
+        final Method show = personClass.getDeclaredMethod("show");
+        show.invoke(person);
+
+        // 第二个参数是返回类型
+        final Method display = personClass.getDeclaredMethod("display", String.class);
+        System.out.println(display.invoke(person, "哈哈哈"));
+
+    }
+}
+```
+
+```java
+public class ConstructorTest {
+    public static void main(String[] args) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException, InstantiationException {
+        Class<Person> personClass = Person.class;
+        Constructor<Person> declaredConstructor = personClass.getDeclaredConstructor(String.class);
+        declaredConstructor.setAccessible(true);
+        final Person person = declaredConstructor.newInstance("king");
+        System.out.println(person);
+    }
+}
+```
 
 
 
 
+
+### (7) 反射的应用用：动态代理
+
+见下一章
+
+### (8)总结：
+
+关注上面几个需要掌握的内容
+
+
+
+## 4、静态代理
+
+### (1)接口
+
+```java
+public interface ClothFactory {
+    void produceCloth();
+}
+```
+
+### (2)静态代理类
+
+```java
+public class ProxyClothFactory implements ClothFactory{
+
+    private ClothFactory clothFactory; // 就拿被代理对象进行实例化
+
+    public ProxyClothFactory(ClothFactory clothFactory) {
+        this.clothFactory = clothFactory;
+    }
+
+    @Override
+    public void produceCloth() {
+        System.out.println("代理工厂做一些准备工作");
+
+        clothFactory.produceCloth();
+
+        System.out.println("代理工厂做一些后续的收尾工作");
+    }
+}
+```
+
+### (3)被代理对象
+
+```java
+public class SupClothFactory implements ClothFactory{
+    @Override
+    public void produceCloth() {
+        System.out.println("sup生产衣服、。。。。。。。。");
+    }
+}
+```
+
+### (4)静态代理使用
+
+```java
+public class StaticProxyTest {
+    public static void main(String[] args) {
+        // 创建被代理对象
+        SupClothFactory supClothFactory = new SupClothFactory();
+        // 创建代理类对象
+        ProxyClothFactory proxyClothFactory = new ProxyClothFactory(supClothFactory);
+        proxyClothFactory.produceCloth();
+    }
+}
+```
+
+### (5)特点
+
+代理类和被代理类在编译期间就确定下来了
+
+
+
+## 5、动态代理
+
+> 使用一个代理将对象包装起来，然后用该代理对象取代原始对象。任何对原始对象的调用都要通过代理。代理对象决定是否以及何时将方法调用转到原方法。
+
+想要实现动态代理，需要解决的问题：
+ 1、如何根据加载到内存中的被代理类，动态创建一个代理类及其对象
+ 2、当通过代理类的对象调用方法时，如何动态的去调用被代理类中的同名方法。
+
+### (1)接口
+
+```java
+public interface Human {
+
+    String getBelief();
+
+    void eat(String food);
+}
+```
+
+### (2)动态代理工厂
+
+```java
+public class MyInvocationHandler implements InvocationHandler {
+
+    private Object obj;// 需要使用被代理类的对象进行赋值
+
+    public void bind(Object o) {
+        this.obj = o;
+    }
+
+    // 当我们通过代理类的对象，调用方法A时，就会自动的调用如下方法：invoke(0
+    // 将被代理类要执行的方法a的功能，声明在invoke()中
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+
+        // 在原方法执行执行之前加入方法
+        System.out.println("method.invoke(obj, args)，执行之前");
+
+        // 代理类对象调用的方法，此方法也就作为了被代理类对象要调用的方法
+        // obj:被代理对象
+        Object invoke = method.invoke(obj, args);
+
+        // 在原方法执行执行之后加入方法
+        System.out.println("method.invoke(obj, args)，执行之后");
+
+        // 上诉方法的返回值就作为当前类中的invoke()的返回值
+        return invoke;
+    }
+}
+
+public class ProxyFactory {
+    // 调用此方法，放回一个被代理类对象，被代理类的对象
+    public static Object getProxyInstance(Object o) {
+        MyInvocationHandler handler = new MyInvocationHandler();
+        handler.bind(o);
+        // 被代理类的 类加载器、接口、
+        return Proxy.newProxyInstance(o.getClass().getClassLoader(), o.getClass().getInterfaces(), handler);
+    }
+}
+```
+
+### (3)被代理对象
+
+```java
+public class Superman implements Human {
+    @Override
+    public String getBelief() {
+        return "I believe I can fly";
+    }
+
+    @Override
+    public void eat(String food) {
+        System.out.println("I like eating " + food);
+    }
+}
+```
+
+### (4)动态代理的使用
+
+```java
+/**
+ * @description: 动态代理
+ * 想要实现动态代理，需要解决的问题：
+ * 1、如何根据加载到内存中的被代理类，动态创建一个代理类及其对象
+ * 2、当通过代理类的对象调用方法时，如何动态的去调用被代理类中的同名方法。
+ * @Author: wangchao
+ * @Date: 2021/7/18
+ */
+public class DynamicProxyTest {
+    public static void main(String[] args) {
+        // 被代理类对象
+        Superman superman = new Superman();
+        // 注意：这里的human不是superman，因为我们是使用superman在这里是被代理类，
+        // 通过ProxyFactory.getProxyInstance(superman)生成了superman的代理对象
+        Human proxyInstance = (Human) ProxyFactory.getProxyInstance(superman);
+        System.out.println(proxyInstance.getBelief());
+        proxyInstance.eat("fish");
+
+        System.out.println("\n----------------------\n");
+
+        // 之前的静态代理，我们也可以通过动态代理来创建SupClothFactory的代理对象
+        SupClothFactory supClothFactory = new SupClothFactory();
+        ClothFactory clothFactory = (ClothFactory)ProxyFactory.getProxyInstance(supClothFactory);
+        clothFactory.produceCloth();
+    }
+}
+```
+
+### (5)、总结
+
+1、如何根据加载到内存中的被代理类，动态创建一个代理类及其对象
+
+```java
+Proxy.newProxyInstance(o.getClass().getClassLoader(), o.getClass().getInterfaces(), handler);
+```
+
+2、当通过代理类的对象调用方法时，如何动态的去调用被代理类中的同名方法
+
+实现InvocationHandler方法，并使用method.invoke(obj,args);
+
+```java
+public class MyInvocationHandler implements InvocationHandler {
+
+    private Object obj;// 需要使用被代理类的对象进行赋值
+
+    public void bind(Object o) {
+        this.obj = o;
+    }
+
+    // 当我们通过代理类的对象，调用方法A时，就会自动的调用如下方法：invoke(0
+    // 将被代理类要执行的方法a的功能，声明在invoke()中
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+
+        // 在原方法执行执行之前加入方法
+        System.out.println("method.invoke(obj, args)，执行之前");
+
+        // 代理类对象调用的方法，此方法也就作为了被代理类对象要调用的方法
+        // obj:被代理对象
+        Object invoke = method.invoke(obj, args);
+
+        // 在原方法执行执行之后加入方法
+        System.out.println("method.invoke(obj, args)，执行之后");
+
+        // 上诉方法的返回值就作为当前类中的invoke()的返回值
+        return invoke;
+    }
+}
+```
 
 
 
@@ -1598,4 +2086,10 @@ cas：没有加锁，通过比较来确认是否修改数据，即提供 了一�
 4、CAS应用
 
 CAS有三个操作数，内存值V，旧的预期值A，需要修改的更新值B。当且仅当预期值A和内存值V相同时，将内存值V修改为B，否则什么都不做。
+
+5、CAS的缺点
+
+、CAS产生的ABA问题
+
+ABA问题的解决可以使用版本号（时间戳）解决。
 
