@@ -62,11 +62,218 @@ P636
 
 
 
-## 4、动态代理
+## 4、静态代理
+
+### (1)接口
+
+```java
+public interface ClothFactory {
+    void produceCloth();
+}
+```
+
+### (2)静态代理类
+
+```java
+public class ProxyClothFactory implements ClothFactory{
+
+    private ClothFactory clothFactory; // 就拿被代理对象进行实例化
+
+    public ProxyClothFactory(ClothFactory clothFactory) {
+        this.clothFactory = clothFactory;
+    }
+
+    @Override
+    public void produceCloth() {
+        System.out.println("代理工厂做一些准备工作");
+
+        clothFactory.produceCloth();
+
+        System.out.println("代理工厂做一些后续的收尾工作");
+    }
+}
+```
+
+### (3)被代理对象
+
+```java
+public class SupClothFactory implements ClothFactory{
+    @Override
+    public void produceCloth() {
+        System.out.println("sup生产衣服、。。。。。。。。");
+    }
+}
+```
+
+### (4)静态代理使用
+
+```java
+public class StaticProxyTest {
+    public static void main(String[] args) {
+        // 创建被代理对象
+        SupClothFactory supClothFactory = new SupClothFactory();
+        // 创建代理类对象
+        ProxyClothFactory proxyClothFactory = new ProxyClothFactory(supClothFactory);
+        proxyClothFactory.produceCloth();
+    }
+}
+```
+
+### (5)特点
+
+代理类和被代理类在编译期间就确定下来了
 
 
 
+## 5、动态代理
 
+> 使用一个代理将对象包装起来，然后用该代理对象取代原始对象。任何对原始对象的调用都要通过代理。代理对象决定是否以及何时将方法调用转到原方法。
+
+想要实现动态代理，需要解决的问题：
+ 1、如何根据加载到内存中的被代理类，动态创建一个代理类及其对象
+ 2、当通过代理类的对象调用方法时，如何动态的去调用被代理类中的同名方法。
+
+### (1)接口
+
+```java
+public interface Human {
+
+    String getBelief();
+
+    void eat(String food);
+}
+```
+
+### (2)动态代理工厂
+
+```java
+public class MyInvocationHandler implements InvocationHandler {
+
+    private Object obj;// 需要使用被代理类的对象进行赋值
+
+    public void bind(Object o) {
+        this.obj = o;
+    }
+
+    // 当我们通过代理类的对象，调用方法A时，就会自动的调用如下方法：invoke(0
+    // 将被代理类要执行的方法a的功能，声明在invoke()中
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+
+        // 在原方法执行执行之前加入方法
+        System.out.println("method.invoke(obj, args)，执行之前");
+
+        // 代理类对象调用的方法，此方法也就作为了被代理类对象要调用的方法
+        // obj:被代理对象
+        Object invoke = method.invoke(obj, args);
+
+        // 在原方法执行执行之后加入方法
+        System.out.println("method.invoke(obj, args)，执行之后");
+
+        // 上诉方法的返回值就作为当前类中的invoke()的返回值
+        return invoke;
+    }
+}
+
+public class ProxyFactory {
+    // 调用此方法，放回一个被代理类对象，被代理类的对象
+    public static Object getProxyInstance(Object o) {
+        MyInvocationHandler handler = new MyInvocationHandler();
+        handler.bind(o);
+        // 被代理类的 类加载器、接口、
+        return Proxy.newProxyInstance(o.getClass().getClassLoader(), o.getClass().getInterfaces(), handler);
+    }
+}
+```
+
+### (3)被代理对象
+
+```java
+public class Superman implements Human {
+    @Override
+    public String getBelief() {
+        return "I believe I can fly";
+    }
+
+    @Override
+    public void eat(String food) {
+        System.out.println("I like eating " + food);
+    }
+}
+```
+
+### (4)动态代理的使用
+
+```java
+/**
+ * @description: 动态代理
+ * 想要实现动态代理，需要解决的问题：
+ * 1、如何根据加载到内存中的被代理类，动态创建一个代理类及其对象
+ * 2、当通过代理类的对象调用方法时，如何动态的去调用被代理类中的同名方法。
+ * @Author: wangchao
+ * @Date: 2021/7/18
+ */
+public class DynamicProxyTest {
+    public static void main(String[] args) {
+        // 被代理类对象
+        Superman superman = new Superman();
+        // 注意：这里的human不是superman，因为我们是使用superman在这里是被代理类，
+        // 通过ProxyFactory.getProxyInstance(superman)生成了superman的代理对象
+        Human proxyInstance = (Human) ProxyFactory.getProxyInstance(superman);
+        System.out.println(proxyInstance.getBelief());
+        proxyInstance.eat("fish");
+
+        System.out.println("\n----------------------\n");
+
+        // 之前的静态代理，我们也可以通过动态代理来创建SupClothFactory的代理对象
+        SupClothFactory supClothFactory = new SupClothFactory();
+        ClothFactory clothFactory = (ClothFactory)ProxyFactory.getProxyInstance(supClothFactory);
+        clothFactory.produceCloth();
+    }
+}
+```
+
+### (5)、总结
+
+1、如何根据加载到内存中的被代理类，动态创建一个代理类及其对象
+
+```java
+Proxy.newProxyInstance(o.getClass().getClassLoader(), o.getClass().getInterfaces(), handler);
+```
+
+2、当通过代理类的对象调用方法时，如何动态的去调用被代理类中的同名方法
+
+实现InvocationHandler方法，并使用method.invoke(obj,args);
+
+```java
+public class MyInvocationHandler implements InvocationHandler {
+
+    private Object obj;// 需要使用被代理类的对象进行赋值
+
+    public void bind(Object o) {
+        this.obj = o;
+    }
+
+    // 当我们通过代理类的对象，调用方法A时，就会自动的调用如下方法：invoke(0
+    // 将被代理类要执行的方法a的功能，声明在invoke()中
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+
+        // 在原方法执行执行之前加入方法
+        System.out.println("method.invoke(obj, args)，执行之前");
+
+        // 代理类对象调用的方法，此方法也就作为了被代理类对象要调用的方法
+        // obj:被代理对象
+        Object invoke = method.invoke(obj, args);
+
+        // 在原方法执行执行之后加入方法
+        System.out.println("method.invoke(obj, args)，执行之后");
+
+        // 上诉方法的返回值就作为当前类中的invoke()的返回值
+        return invoke;
+    }
+}
+```
 
 
 
@@ -1598,4 +1805,10 @@ cas：没有加锁，通过比较来确认是否修改数据，即提供 了一�
 4、CAS应用
 
 CAS有三个操作数，内存值V，旧的预期值A，需要修改的更新值B。当且仅当预期值A和内存值V相同时，将内存值V修改为B，否则什么都不做。
+
+5、CAS的缺点
+
+、CAS产生的ABA问题
+
+ABA问题的解决可以使用版本号（时间戳）解决。
 
