@@ -32,6 +32,126 @@ k=11
 
 ### 2.1 ArrayList
 
+> 线程不安全
+
+#### （1）初步小理解
+
+##### 默认大小是多少？？？
+
+1、查看源码可知默认大小是10，但是没找到初始化为10的代码？？？？？
+
+```java
+/**
+  * Constructs an empty list with an initial capacity of ten.
+  */
+public ArrayList() {
+  this.elementData = DEFAULTCAPACITY_EMPTY_ELEMENTDATA;
+}
+```
+
+2、查看新增方法，在calculateCapacity中可知默认的容量是10
+
+```java
+public boolean add(E e) {
+        ensureCapacityInternal(size + 1);  // Increments modCount!!
+        elementData[size++] = e;
+        return true;
+    }
+
+// 确定容量
+private void ensureCapacityInternal(int minCapacity) {
+        ensureExplicitCapacity(calculateCapacity(elementData, minCapacity));
+    }
+
+// 计算出容量，小于10，则返回10（可知默认的容量是10）
+private static final int DEFAULT_CAPACITY = 10;
+private static int calculateCapacity(Object[] elementData, int minCapacity) {
+        if (elementData == DEFAULTCAPACITY_EMPTY_ELEMENTDATA) {
+            return Math.max(DEFAULT_CAPACITY, minCapacity);
+        }
+        return minCapacity;
+    }
+```
+
+##### 为什么线程不安全
+
+add方法没有加synchronized
+
+##### 线程不安全示例
+
+```java
+public class NoSafeDemo {
+    public static void main(String[] args) {
+        List<String> list = new ArrayList<>();
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+               list.add(UUID.randomUUID().toString().substring(0,9));
+                System.out.println(list);
+            }).start();
+        }
+        // 报错：java.util.ConcurrentModificationException 线程不安全常见的异常（并发修改异常）
+      	// 报错原因：并发争抢修改导致
+    }
+}
+```
+
+##### 变成线程安全
+
+1、使用方法Collections.synchronizedList()
+
+```java
+public class SafeDemo2 {
+    public static void main(String[] args) {
+        List<String> list = Collections.synchronizedList(new ArrayList<>());
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+               list.add(UUID.randomUUID().toString().substring(0,9));
+                System.out.println(list);
+            }).start();
+        }
+    }
+}
+```
+
+2、使用java.util.concurrent包中的CopyOnWriteArrayList，写时复制
+
+```java
+public class SafeDemo3 {
+    public static void main(String[] args) {
+        List<String> list = new CopyOnWriteArrayList<>();
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+               list.add(UUID.randomUUID().toString().substring(0,9));
+                System.out.println(list);
+            }).start();
+        }
+    }
+}
+```
+
+参考源码add()
+
+```java
+public boolean add(E e) {
+    final ReentrantLock lock = this.lock;
+    lock.lock();
+    try {
+        Object[] elements = getArray();
+        int len = elements.length;
+        Object[] newElements = Arrays.copyOf(elements, len + 1);
+        newElements[len] = e;
+        setArray(newElements);
+        return true;
+    } finally {
+        lock.unlock();
+    }
+}
+```
+
+CopyOnWrite容器即写时复制容器，往一个容器中添加元素的时候，不直接往当前容器Object[]添加，而是先将当前容器进行copy，复制出一个新容器 Object[] newElements，新容器容量比原容器大1，将新元素放入新容器的最后，最后将原容器的引用指向新容器setArray(newElements);
+这样做的好处是可以对CopyOnWrite容器进行并发读，而不需要加锁，因为当前容器不会添加任何元素，所以CopyOnWrite容器也是一种读写分离的思想，读和写时不同的容器。
+写的时候加锁，保证线程安全。
+
 P529
 
 
@@ -48,11 +168,191 @@ P530
 
 P531
 
+add方法加了synchronized，线程安全
+
+```java
+ public synchronized boolean add(E e) {
+        modCount++;
+        ensureCapacityHelper(elementCount + 1);
+        elementData[elementCount++] = e;
+        return true;
+    }
+```
+
+以下代码完美运行无报错
+
+```java
+public class SafeDemo {
+    public static void main(String[] args) {
+        List<String> list = new Vector<>();
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+               list.add(UUID.randomUUID().toString().substring(0,9));
+                System.out.println(list);
+            }).start();
+        }
+    }
+}
+```
+
 
 
 ### 2.4HashMap
 
+#### (1)初步小理解
+
+##### 非线程安全实例
+
+```java
+public class NoSafeDemo {
+    public static void main(String[] args) {
+        Map<Object, Object> map = new HashMap<>();
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+                map.put(Thread.currentThread().getName(),UUID.randomUUID().toString().substring(0,9));
+                System.out.println(map);
+            }).start();
+        }
+        // 报错：java.util.ConcurrentModificationException 线程不安全常见的异常（并发修改异常）
+    }
+}
+```
+
+##### 解决线程安全
+
+1、使用ConcurrentHashMap（怎么实现的有空看下）
+
+```java
+public class SafeDemo {
+    public static void main(String[] args) {
+        Map<Object, Object> map = new ConcurrentHashMap<>();
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+                map.put(Thread.currentThread().getName(),UUID.randomUUID().toString().substring(0,9));
+                System.out.println(map);
+            }).start();
+        }
+    }
+}
+```
+
+2、使用Collections.synchronizedMap
+
+```java
+public class SafeDemo2 {
+    public static void main(String[] args) {
+        Map<Object, Object> map = Collections.synchronizedMap(new HashMap<>());
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+                map.put(Thread.currentThread().getName(),UUID.randomUUID().toString().substring(0,9));
+                System.out.println(map);
+            }).start();
+        }
+    }
+}
+```
+
+
+
 P550
+
+
+
+### 2.5 HashSet
+
+> 线程不安全
+
+#### （1）初步小理解
+
+##### 查看HashSet底层实现
+
+底层居然是HashMap<>();.........
+
+```java
+/**
+ * Constructs a new, empty set; the backing <tt>HashMap</tt> instance has
+ * default initial capacity (16) and load factor (0.75).
+ */
+public HashSet() {
+    map = new HashMap<>();
+}
+```
+
+那为什么hashSet只能add一个元素，HashMap是put(k,v)呢？？？
+
+因为HashSet的add方法底层也是map的put，只是put的value是固定值PRESENT
+
+```java
+private static final Object PRESENT = new Object();
+public boolean add(E e) {
+        return map.put(e, PRESENT)==null;
+}
+```
+
+##### 线程不安全实例
+
+```java
+public class NoSafeDemo {
+    public static void main(String[] args) {
+        Set<String> set = new HashSet<>();
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+                set.add(UUID.randomUUID().toString().substring(0,9));
+                System.out.println(set);
+            }).start();
+        }
+        // 报错：java.util.ConcurrentModificationException 线程不安全常见的异常（并发修改异常）
+    }
+}
+```
+
+##### 解决线程安全
+
+1、使用Collections.synchronizedSet()
+
+```java
+public class SafeDemo {
+    public static void main(String[] args) {
+        Set<String> set = Collections.synchronizedSet(new HashSet<>());
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+                set.add(UUID.randomUUID().toString().substring(0,9));
+                System.out.println(set);
+            }).start();
+        }
+    }
+}
+```
+
+2、使用CopyOnWriteArraySet()
+
+```java
+public class SafeDemo2 {
+    public static void main(String[] args) {
+        Set<String> set = new CopyOnWriteArraySet<>();
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+                set.add(UUID.randomUUID().toString().substring(0,9));
+                System.out.println(set);
+            }).start();
+        }
+    }
+}
+```
+
+CopyOnWriteArraySet的底层还是CopyOnWriteArrayList
+
+```java
+public CopyOnWriteArraySet() {
+    al = new CopyOnWriteArrayList<E>();
+}
+```
+
+
+
+
+
+
 
 
 
@@ -1952,7 +2252,7 @@ Unsafe类中的compareAndSwapInt，是一个本地方法，该方法的实现位
 - 只能保证一个共享变量的原子操作，当需要对多个共享变量操作时，循环CAS就无法保证操作的原子性，需要加锁来保证。
 - 引出来的ABA问题（什么是ABA问题，后面讨论）
 
-## 5、ABA问题
+## 5、AtomicInteger的ABA问题
 
 > 狸猫换太子
 >
@@ -1978,7 +2278,9 @@ Unsafe类中的compareAndSwapInt，是一个本地方法，该方法的实现位
 
 上诉过程就是加了版本号控制的结果，解决了ABA问题。
 
-### （1）ABA问题的产生演示
+### （1）ABA问题的产生演示（原子更新引用展示）
+
+AtomicReference 原子更新引用
 
 ```java
 public class ABADemo {
@@ -2089,7 +2391,9 @@ CAS有三个操作数，内存值V，旧的预期值A，需要修改的更新值
 
 5、CAS的缺点
 
-、CAS产生的ABA问题
+6、CAS产生的ABA问题
 
 ABA问题的解决可以使用版本号（时间戳）解决。
+
+# 十九、集合类的不安全问题
 
