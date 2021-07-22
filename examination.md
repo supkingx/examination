@@ -2397,3 +2397,250 @@ ABA问题的解决可以使用版本号（时间戳）解决。
 
 # 十九、集合类的不安全问题
 
+参考第一章
+
+# 二十、java锁
+
+## 1、公平/非公平锁
+
+ReentrantLock默认实现是非公平，除非指定公平为true
+
+```java
+Lock lock = new ReentrantLock(true);
+
+/**
+* Creates an instance of {@code ReentrantLock} with the
+* given fairness policy.
+*
+* @param fair {@code true} if this lock should use a fair ordering policy
+*/
+public ReentrantLock() {
+  sync = new NonfairSync();
+}
+
+public ReentrantLock(boolean fair) {
+sync = fair ? new FairSync() : new NonfairSync();
+}
+```
+
+**公平锁**
+
+是指多个线程按照申请锁的顺序来获取锁，类似于排队，先来后到。
+
+
+
+**非公平锁**
+
+是指多个线程获取锁的顺序并不是按照申请锁的顺序，有可能后申请的线程比先申请的线程优先获取锁，在高并发的情况下，有可能会造成优先级反转或者饥饿现象。
+
+优点：吞吐量比公平锁大
+
+对于synchronized而言，也是非公平的
+
+## 2、可重入锁
+
+> 可重入锁（也叫递归锁）
+
+> 指的是同一线程外层函数获得锁之后，内层递归函数仍然能获取锁的代码，同一个线程在外层获取锁的时候，在进入内层方法会自动获取锁。
+>
+> 也就是说，线程可以进入任何一个 已经拥有的锁的所同步着的代码块。
+>
+> ReentrantLock/Synchronized就是一个典型的可重入锁（非公平的可重入锁）
+
+优点：避免死锁
+
+### 代码演示
+
+#### 证明synchronized是一个典型的可重入锁
+
+```java
+public class Phone {
+    public synchronized void sendSMS() {
+        System.out.println(Thread.currentThread().getName() + "---sendSMS()");
+        sendEmail(); // 内部同步方法
+    }
+
+    public synchronized void sendEmail() {
+        System.out.println(Thread.currentThread().getId() + "------sendEmail()");
+    }
+}
+```
+
+```java
+public class ReentrantLockDemo {
+    public static void main(String[] args) {
+        Phone phone = new Phone();
+        new Thread(()->{
+            try {
+                phone.sendSMS();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        },"t1").start();
+
+        new Thread(()->{
+            try {
+                phone.sendSMS();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        },"t2").start();
+    }
+}
+
+结果：
+t1---sendSMS()
+t1------sendEmail()
+t2---sendSMS()
+t2------sendEmail()
+```
+
+分析：
+
+t1线程在外层方法获取锁的时候，t1在进入内层方法会自动获取锁
+
+
+
+#### 证明ReentrantLock是一个可重入锁
+
+```java
+public class Phone2 implements Runnable {
+    Lock lock = new ReentrantLock();
+    @Override
+    public void run() {
+        get();
+    }
+
+    private void get() {
+        lock.lock();
+        try {
+            System.out.println(Thread.currentThread().getName() + "---get()");
+            set();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void set() {
+        lock.lock();
+        try {
+            System.out.println(Thread.currentThread().getName() + "---set()");
+        } finally {
+            lock.unlock();
+        }
+    }
+}
+```
+
+```java
+public class ReentrantLockDemo2 {
+    public static void main(String[] args) {
+        Phone2 phone = new Phone2();
+        Thread thread1 = new Thread(phone);
+        Thread thread2 = new Thread(phone);
+
+        thread1.start();
+        thread2.start();
+    }
+}
+
+结果：
+Thread-0---get()
+Thread-0---set()
+Thread-1---get()
+Thread-1---set()
+```
+
+分析：
+
+Thread-0线程在外层方法获取锁的时候，Thread-0在进入内层方法会自动获取锁
+
+扩展：多加几把锁行不行？
+
+```java
+private void get() {
+        lock.lock();
+        lock.lock();
+        lock.lock();
+        try {
+            System.out.println(Thread.currentThread().getName() + "---get()");
+            set();
+        } finally {
+            lock.unlock();
+            lock.unlock();
+            lock.unlock();
+        }
+    }
+```
+
+答：没有任何问题，只要lock和unlock数量一致就行
+
+### 总结
+
+优点：避免死锁
+
+怎么避免死锁的，只要开一道锁，就能一马平川（因为拿到一个锁就等于拿到的方法内部的所有锁）
+
+## 3、自旋锁
+
+> 可以回顾之前所说的CAS
+>
+> 自旋锁（spinlock）是指尝试获取锁的线程不会立即阻塞，而是采用循环的方式尝试获取锁，这样的好处是减少线程上下文切换的消耗，缺点是循环会消耗CPU
+>
+> 简而言之：一个线程想去获得一个资源，但是该资源暂时获取不到，该线程就会先去做其他事情，过一会再来获取这个资源
+
+### 实现自旋锁
+
+定义锁
+
+```java
+public class SpinLockDemo {
+    AtomicReference<Thread> atomicReference = new AtomicReference<>();
+
+    public void myLock() {
+        Thread thread = Thread.currentThread();
+        System.out.println(thread.getName() + "--myLock,come in");
+
+        while (!atomicReference.compareAndSet(null, thread)) {
+
+        }
+    }
+
+    public void myUnLock() {
+        Thread thread = Thread.currentThread();
+        atomicReference.compareAndSet(thread, null);
+        System.out.println(thread.getName() + "--myUnLock()");
+
+    }
+}
+```
+
+测试自定义自旋锁
+
+```java
+public class SpinLockDemoTest {
+    public static void main(String[] args) {
+        SpinLockDemo spinLockDemo = new SpinLockDemo();
+        new Thread(()->{
+            spinLockDemo.myLock();
+            try {TimeUnit.SECONDS.sleep(5); } catch (InterruptedException e) { e.printStackTrace();}
+            spinLockDemo.myUnLock();
+        },"AA").start();
+
+        try {TimeUnit.SECONDS.sleep(1);} catch (InterruptedException e) {e.printStackTrace();}
+
+        new Thread(()->{
+            spinLockDemo.myLock();
+            try {TimeUnit.SECONDS.sleep(1); } catch (InterruptedException e) { e.printStackTrace(); }
+            spinLockDemo.myUnLock();
+        },"BB").start();
+    }
+}
+
+结果
+AA--myLock,come in
+BB--myLock,come in
+AA--myUnLock()
+BB--myUnLock()
+```
+
