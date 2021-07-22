@@ -2596,7 +2596,8 @@ private void get() {
 ```java
 public class SpinLockDemo {
     AtomicReference<Thread> atomicReference = new AtomicReference<>();
-
+		
+   // 获取锁
     public void myLock() {
         Thread thread = Thread.currentThread();
         System.out.println(thread.getName() + "--myLock,come in");
@@ -2605,7 +2606,8 @@ public class SpinLockDemo {
 
         }
     }
-
+		
+  // 释放锁
     public void myUnLock() {
         Thread thread = Thread.currentThread();
         atomicReference.compareAndSet(thread, null);
@@ -2644,3 +2646,6 @@ AA--myUnLock()
 BB--myUnLock()
 ```
 
+AA线程获取锁之后，等待5秒，在此期间BB线程想要获取锁，由于AA线程尚未释放锁，所以此时BB线程通过循环尝试获取锁。
+
+5秒之后，AA线程释放了锁，此时BB线程拿到了锁。
