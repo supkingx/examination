@@ -32,6 +32,126 @@ k=11
 
 ### 2.1 ArrayList
 
+> 线程不安全
+
+#### （1）初步小理解
+
+##### 默认大小是多少？？？
+
+1、查看源码可知默认大小是10，但是没找到初始化为10的代码？？？？？
+
+```java
+/**
+  * Constructs an empty list with an initial capacity of ten.
+  */
+public ArrayList() {
+  this.elementData = DEFAULTCAPACITY_EMPTY_ELEMENTDATA;
+}
+```
+
+2、查看新增方法，在calculateCapacity中可知默认的容量是10
+
+```java
+public boolean add(E e) {
+        ensureCapacityInternal(size + 1);  // Increments modCount!!
+        elementData[size++] = e;
+        return true;
+    }
+
+// 确定容量
+private void ensureCapacityInternal(int minCapacity) {
+        ensureExplicitCapacity(calculateCapacity(elementData, minCapacity));
+    }
+
+// 计算出容量，小于10，则返回10（可知默认的容量是10）
+private static final int DEFAULT_CAPACITY = 10;
+private static int calculateCapacity(Object[] elementData, int minCapacity) {
+        if (elementData == DEFAULTCAPACITY_EMPTY_ELEMENTDATA) {
+            return Math.max(DEFAULT_CAPACITY, minCapacity);
+        }
+        return minCapacity;
+    }
+```
+
+##### 为什么线程不安全
+
+add方法没有加synchronized
+
+##### 线程不安全示例
+
+```java
+public class NoSafeDemo {
+    public static void main(String[] args) {
+        List<String> list = new ArrayList<>();
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+               list.add(UUID.randomUUID().toString().substring(0,9));
+                System.out.println(list);
+            }).start();
+        }
+        // 报错：java.util.ConcurrentModificationException 线程不安全常见的异常（并发修改异常）
+      	// 报错原因：并发争抢修改导致
+    }
+}
+```
+
+##### 变成线程安全
+
+1、使用方法Collections.synchronizedList()
+
+```java
+public class SafeDemo2 {
+    public static void main(String[] args) {
+        List<String> list = Collections.synchronizedList(new ArrayList<>());
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+               list.add(UUID.randomUUID().toString().substring(0,9));
+                System.out.println(list);
+            }).start();
+        }
+    }
+}
+```
+
+2、使用java.util.concurrent包中的CopyOnWriteArrayList，写时复制
+
+```java
+public class SafeDemo3 {
+    public static void main(String[] args) {
+        List<String> list = new CopyOnWriteArrayList<>();
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+               list.add(UUID.randomUUID().toString().substring(0,9));
+                System.out.println(list);
+            }).start();
+        }
+    }
+}
+```
+
+参考源码add()
+
+```java
+public boolean add(E e) {
+    final ReentrantLock lock = this.lock;
+    lock.lock();
+    try {
+        Object[] elements = getArray();
+        int len = elements.length;
+        Object[] newElements = Arrays.copyOf(elements, len + 1);
+        newElements[len] = e;
+        setArray(newElements);
+        return true;
+    } finally {
+        lock.unlock();
+    }
+}
+```
+
+CopyOnWrite容器即写时复制容器，往一个容器中添加元素的时候，不直接往当前容器Object[]添加，而是先将当前容器进行copy，复制出一个新容器 Object[] newElements，新容器容量比原容器大1，将新元素放入新容器的最后，最后将原容器的引用指向新容器setArray(newElements);
+这样做的好处是可以对CopyOnWrite容器进行并发读，而不需要加锁，因为当前容器不会添加任何元素，所以CopyOnWrite容器也是一种读写分离的思想，读和写时不同的容器。
+写的时候加锁，保证线程安全。
+
 P529
 
 
@@ -48,11 +168,191 @@ P530
 
 P531
 
+add方法加了synchronized，线程安全
+
+```java
+ public synchronized boolean add(E e) {
+        modCount++;
+        ensureCapacityHelper(elementCount + 1);
+        elementData[elementCount++] = e;
+        return true;
+    }
+```
+
+以下代码完美运行无报错
+
+```java
+public class SafeDemo {
+    public static void main(String[] args) {
+        List<String> list = new Vector<>();
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+               list.add(UUID.randomUUID().toString().substring(0,9));
+                System.out.println(list);
+            }).start();
+        }
+    }
+}
+```
+
 
 
 ### 2.4HashMap
 
+#### (1)初步小理解
+
+##### 非线程安全实例
+
+```java
+public class NoSafeDemo {
+    public static void main(String[] args) {
+        Map<Object, Object> map = new HashMap<>();
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+                map.put(Thread.currentThread().getName(),UUID.randomUUID().toString().substring(0,9));
+                System.out.println(map);
+            }).start();
+        }
+        // 报错：java.util.ConcurrentModificationException 线程不安全常见的异常（并发修改异常）
+    }
+}
+```
+
+##### 解决线程安全
+
+1、使用ConcurrentHashMap（怎么实现的有空看下）
+
+```java
+public class SafeDemo {
+    public static void main(String[] args) {
+        Map<Object, Object> map = new ConcurrentHashMap<>();
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+                map.put(Thread.currentThread().getName(),UUID.randomUUID().toString().substring(0,9));
+                System.out.println(map);
+            }).start();
+        }
+    }
+}
+```
+
+2、使用Collections.synchronizedMap
+
+```java
+public class SafeDemo2 {
+    public static void main(String[] args) {
+        Map<Object, Object> map = Collections.synchronizedMap(new HashMap<>());
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+                map.put(Thread.currentThread().getName(),UUID.randomUUID().toString().substring(0,9));
+                System.out.println(map);
+            }).start();
+        }
+    }
+}
+```
+
+
+
 P550
+
+
+
+### 2.5 HashSet
+
+> 线程不安全
+
+#### （1）初步小理解
+
+##### 查看HashSet底层实现
+
+底层居然是HashMap<>();.........
+
+```java
+/**
+ * Constructs a new, empty set; the backing <tt>HashMap</tt> instance has
+ * default initial capacity (16) and load factor (0.75).
+ */
+public HashSet() {
+    map = new HashMap<>();
+}
+```
+
+那为什么hashSet只能add一个元素，HashMap是put(k,v)呢？？？
+
+因为HashSet的add方法底层也是map的put，只是put的value是固定值PRESENT
+
+```java
+private static final Object PRESENT = new Object();
+public boolean add(E e) {
+        return map.put(e, PRESENT)==null;
+}
+```
+
+##### 线程不安全实例
+
+```java
+public class NoSafeDemo {
+    public static void main(String[] args) {
+        Set<String> set = new HashSet<>();
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+                set.add(UUID.randomUUID().toString().substring(0,9));
+                System.out.println(set);
+            }).start();
+        }
+        // 报错：java.util.ConcurrentModificationException 线程不安全常见的异常（并发修改异常）
+    }
+}
+```
+
+##### 解决线程安全
+
+1、使用Collections.synchronizedSet()
+
+```java
+public class SafeDemo {
+    public static void main(String[] args) {
+        Set<String> set = Collections.synchronizedSet(new HashSet<>());
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+                set.add(UUID.randomUUID().toString().substring(0,9));
+                System.out.println(set);
+            }).start();
+        }
+    }
+}
+```
+
+2、使用CopyOnWriteArraySet()
+
+```java
+public class SafeDemo2 {
+    public static void main(String[] args) {
+        Set<String> set = new CopyOnWriteArraySet<>();
+        for (int i = 0; i <= 30; i++) {
+            new Thread(()->{
+                set.add(UUID.randomUUID().toString().substring(0,9));
+                System.out.println(set);
+            }).start();
+        }
+    }
+}
+```
+
+CopyOnWriteArraySet的底层还是CopyOnWriteArrayList
+
+```java
+public CopyOnWriteArraySet() {
+    al = new CopyOnWriteArrayList<E>();
+}
+```
+
+
+
+
+
+
 
 
 
@@ -1371,9 +1671,19 @@ public class Demo02 {
 
 # 十一、JVM
 
-> https://www.bilibili.com/video/BV1PJ411n7xZ?spm_id_from=333.788.b_636f6d6d656e74.11
+## 1、栈、堆
+
+<img src="examination.assets/image-20210712210015091.png" alt="image-20210712210015091" style="zoom:50%;" />
+
+> 堆（heap）：存储对象、实例，和数组
 >
-> JVM垃圾回收机制，GC发生在JVM哪部分，有几种GC，它们的算法是什么
+> 栈（stack）：虚拟机栈。用于存储局部变量表。局部变量表存放了编译期可以知道长度的各种基本数据类型（boolean、byte、short、char、int、float、long、double）、对象引用（reference类型，存储对象在堆内存的首地址）。方法执行完自动释放。
+>
+> 方法区（Method Area）用于存储已被虚拟机加载的类信息、常量、静态常量、即时编译器编译后的代码等数据。
+
+例如Demo02 obj1 = new Demo02()，obj1在栈里面，new Demo02()在堆里面
+
+
 
 ## 1、GC是什么
 
@@ -1952,7 +2262,7 @@ Unsafe类中的compareAndSwapInt，是一个本地方法，该方法的实现位
 - 只能保证一个共享变量的原子操作，当需要对多个共享变量操作时，循环CAS就无法保证操作的原子性，需要加锁来保证。
 - 引出来的ABA问题（什么是ABA问题，后面讨论）
 
-## 5、ABA问题
+## 5、AtomicInteger的ABA问题
 
 > 狸猫换太子
 >
@@ -1978,7 +2288,9 @@ Unsafe类中的compareAndSwapInt，是一个本地方法，该方法的实现位
 
 上诉过程就是加了版本号控制的结果，解决了ABA问题。
 
-### （1）ABA问题的产生演示
+### （1）ABA问题的产生演示（原子更新引用展示）
+
+AtomicReference 原子更新引用
 
 ```java
 public class ABADemo {
@@ -2089,7 +2401,476 @@ CAS有三个操作数，内存值V，旧的预期值A，需要修改的更新值
 
 5、CAS的缺点
 
-、CAS产生的ABA问题
+6、CAS产生的ABA问题
 
 ABA问题的解决可以使用版本号（时间戳）解决。
+
+# 十九、集合类的不安全问题
+
+参考第一章
+
+# 二十、java锁
+
+## 1、公平/非公平锁
+
+ReentrantLock默认实现是非公平，除非指定公平为true
+
+```java
+Lock lock = new ReentrantLock(true);
+
+/**
+* Creates an instance of {@code ReentrantLock} with the
+* given fairness policy.
+*
+* @param fair {@code true} if this lock should use a fair ordering policy
+*/
+public ReentrantLock() {
+  sync = new NonfairSync();
+}
+
+public ReentrantLock(boolean fair) {
+sync = fair ? new FairSync() : new NonfairSync();
+}
+```
+
+**公平锁**
+
+是指多个线程按照申请锁的顺序来获取锁，类似于排队，先来后到。
+
+
+
+**非公平锁**
+
+是指多个线程获取锁的顺序并不是按照申请锁的顺序，有可能后申请的线程比先申请的线程优先获取锁，在高并发的情况下，有可能会造成优先级反转或者饥饿现象。
+
+优点：吞吐量比公平锁大
+
+对于synchronized而言，也是非公平的
+
+## 2、可重入锁（又名递归锁）
+
+> 可重入锁（也叫递归锁）
+
+> 指的是同一线程外层函数获得锁之后，内层递归函数仍然能获取锁的代码，同一个线程在外层获取锁的时候，在进入内层方法会自动获取锁。
+>
+> 也就是说，线程可以进入任何一个 已经拥有的锁的所同步着的代码块。
+>
+> ReentrantLock/Synchronized就是一个典型的可重入锁（非公平的可重入锁）
+
+优点：避免死锁
+
+### 代码演示
+
+#### 证明synchronized是一个典型的可重入锁
+
+```java
+public class Phone {
+    public synchronized void sendSMS() {
+        System.out.println(Thread.currentThread().getName() + "---sendSMS()");
+        sendEmail(); // 内部同步方法
+    }
+
+    public synchronized void sendEmail() {
+        System.out.println(Thread.currentThread().getId() + "------sendEmail()");
+    }
+}
+```
+
+```java
+public class ReentrantLockDemo {
+    public static void main(String[] args) {
+        Phone phone = new Phone();
+        new Thread(()->{
+            try {
+                phone.sendSMS();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        },"t1").start();
+
+        new Thread(()->{
+            try {
+                phone.sendSMS();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        },"t2").start();
+    }
+}
+
+结果：
+t1---sendSMS()
+t1------sendEmail()
+t2---sendSMS()
+t2------sendEmail()
+```
+
+分析：
+
+t1线程在外层方法获取锁的时候，t1在进入内层方法会自动获取锁
+
+
+
+#### 证明ReentrantLock是一个可重入锁
+
+```java
+public class Phone2 implements Runnable {
+    Lock lock = new ReentrantLock();
+    @Override
+    public void run() {
+        get();
+    }
+
+    private void get() {
+        lock.lock();
+        try {
+            System.out.println(Thread.currentThread().getName() + "---get()");
+            set();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void set() {
+        lock.lock();
+        try {
+            System.out.println(Thread.currentThread().getName() + "---set()");
+        } finally {
+            lock.unlock();
+        }
+    }
+}
+```
+
+```java
+public class ReentrantLockDemo2 {
+    public static void main(String[] args) {
+        Phone2 phone = new Phone2();
+        Thread thread1 = new Thread(phone);
+        Thread thread2 = new Thread(phone);
+
+        thread1.start();
+        thread2.start();
+    }
+}
+
+结果：
+Thread-0---get()
+Thread-0---set()
+Thread-1---get()
+Thread-1---set()
+```
+
+分析：
+
+Thread-0线程在外层方法获取锁的时候，Thread-0在进入内层方法会自动获取锁
+
+扩展：多加几把锁行不行？
+
+```java
+private void get() {
+        lock.lock();
+        lock.lock();
+        lock.lock();
+        try {
+            System.out.println(Thread.currentThread().getName() + "---get()");
+            set();
+        } finally {
+            lock.unlock();
+            lock.unlock();
+            lock.unlock();
+        }
+    }
+```
+
+答：没有任何问题，只要lock和unlock数量一致就行
+
+### 总结
+
+优点：避免死锁
+
+怎么避免死锁的，只要开一道锁，就能一马平川（因为拿到一个锁就等于拿到的方法内部的所有锁）
+
+## 3、自旋锁
+
+> 可以回顾之前所说的CAS
+>
+> 自旋锁（spinlock）是指尝试获取锁的线程不会立即阻塞，而是采用循环的方式尝试获取锁，这样的好处是减少线程上下文切换的消耗，缺点是循环会消耗CPU
+>
+> 简而言之：一个线程想去获得一个资源，但是该资源暂时获取不到，该线程就会先去做其他事情，过一会再来获取这个资源
+
+### 实现自旋锁
+
+定义锁
+
+```java
+public class SpinLockDemo {
+    AtomicReference<Thread> atomicReference = new AtomicReference<>();
+		
+   // 获取锁
+    public void myLock() {
+        Thread thread = Thread.currentThread();
+        System.out.println(thread.getName() + "--myLock,come in");
+
+        while (!atomicReference.compareAndSet(null, thread)) {
+
+        }
+    }
+		
+  // 释放锁
+    public void myUnLock() {
+        Thread thread = Thread.currentThread();
+        atomicReference.compareAndSet(thread, null);
+        System.out.println(thread.getName() + "--myUnLock()");
+
+    }
+}
+```
+
+测试自定义自旋锁
+
+```java
+public class SpinLockDemoTest {
+    public static void main(String[] args) {
+        SpinLockDemo spinLockDemo = new SpinLockDemo();
+        new Thread(()->{
+            spinLockDemo.myLock();
+            try {TimeUnit.SECONDS.sleep(5); } catch (InterruptedException e) { e.printStackTrace();}
+            spinLockDemo.myUnLock();
+        },"AA").start();
+
+        try {TimeUnit.SECONDS.sleep(1);} catch (InterruptedException e) {e.printStackTrace();}
+
+        new Thread(()->{
+            spinLockDemo.myLock();
+            try {TimeUnit.SECONDS.sleep(1); } catch (InterruptedException e) { e.printStackTrace(); }
+            spinLockDemo.myUnLock();
+        },"BB").start();
+    }
+}
+
+结果
+AA--myLock,come in
+BB--myLock,come in
+AA--myUnLock()
+BB--myUnLock()
+```
+
+AA线程获取锁之后，等待5秒，在此期间BB线程想要获取锁，由于AA线程尚未释放锁，所以此时BB线程通过循环尝试获取锁。
+
+5秒之后，AA线程释放了锁，此时BB线程拿到了锁。
+
+## 4、独占锁(写锁)/共享锁(读锁)/互斥锁
+
+ 独占锁：指该锁一次只能被一个线程所持有。对ReentrantLock和Synchronized而言都是独占锁
+
+ 共享锁：指该锁可被多个线程所持有。
+
+ReentrantReadWriteLock其读锁是共享锁，其写锁是独占锁。
+读锁的共享锁可保证并发读是非常高效的，读写，写读，写写的过程是互斥的。
+
+> 通俗理解：机场大屏幕，每个人都能看到，这就是读共享；但是在在机场通知旅客飞机延误的只能是一个人，如果一群广播员播放，将会乱套，这就是独占写锁。同时在播报的时候，屏幕信息就不能信任，这就是互斥。
+>
+> 即
+>
+> 多个线程同时读一个资源类没有任何问题，所以为了满足并发量，读取共享资源应该可以同时进行。但是如果有一个线程想去写共享资源，就不应该再有其他线程可以对该资源进行读或写
+
+### 代码展示
+
+#### 正面例子
+
+共享缓存
+
+```java
+public class MyCache {
+    /**
+     * volatile关键字可以查看前面的包
+     * 管缓存的，必须用volatile，保证可见性和禁止指令重排，一个线程对其进行了修改，必须让其它线程知道
+     */
+    private volatile Map<String, Object> map = new HashMap<>();
+
+    /**
+     * 可以对比加了读写锁和没加读写锁的区别
+     */
+    private ReentrantReadWriteLock readWriteLock = new ReentrantReadWriteLock();
+
+    /**
+     * 写操作：原子+独占，整个写过程必须完整的统一体，不能被分割和打断
+     *
+     * @param key
+     * @param value
+     */
+    public void put(String key, Object value) {
+        readWriteLock.writeLock().lock();
+        try {
+            System.out.println(Thread.currentThread().getName() + " 正在写入:" + "key:" + key + ",value:" + value);
+            // 暂定一会模拟网络延迟
+            try {
+                TimeUnit.MILLISECONDS.sleep(300);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            map.put(key, value);
+            System.out.println(Thread.currentThread().getName() + " 写入完成:" + "key:" + key + ",value:" + value);
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            readWriteLock.writeLock().unlock();
+        }
+    }
+
+    public void get(String key) {
+        readWriteLock.readLock().lock();
+        try {
+            System.out.println(Thread.currentThread().getName() + " 正在读取:" + "key:" + key);
+            // 暂定一会模拟网络延迟
+            try {
+                TimeUnit.MILLISECONDS.sleep(300);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            Object result = map.get(key);
+            System.out.println(Thread.currentThread().getName() + " 读取完成:" + "key:" + key + ",result:" + result);
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            readWriteLock.readLock().unlock();
+        }
+    }
+
+    public void clearMap() {
+        map.clear();
+    }
+}
+```
+
+测试
+
+```java
+public class ReadWriteLockDemo {
+
+    public static void main(String[] args) {
+        MyCache myCache = new MyCache();
+
+        for (int i = 0; i < 5; i++) {
+            final int i1 = i;
+            new Thread(() -> {
+                myCache.put(i1 + "", i1 + "");
+            }, String.valueOf(i)).start();
+        }
+
+        for (int i = 0; i < 5; i++) {
+            final int i1 = i;
+            new Thread(() -> {
+                myCache.get(i1 + "");
+            }, String.valueOf(i)).start();
+        }
+    }
+}
+```
+
+结果
+
+```
+0 正在写入:key:0,value:0
+0 写入完成:key:0,value:0
+1 正在写入:key:1,value:1
+1 写入完成:key:1,value:1
+2 正在写入:key:2,value:2
+2 写入完成:key:2,value:2
+3 正在写入:key:3,value:3
+3 写入完成:key:3,value:3
+4 正在写入:key:4,value:4
+4 写入完成:key:4,value:4
+0 正在读取:key:0
+1 正在读取:key:1
+2 正在读取:key:2
+3 正在读取:key:3
+4 正在读取:key:4
+2 读取完成:key:2,result:2
+3 读取完成:key:3,result:3
+0 读取完成:key:0,result:0
+4 读取完成:key:4,result:4
+1 读取完成:key:1,result:1
+```
+
+可以很明显的看到，先写后读的，这样可以保证每次读到的数据都是最新的。展现了读写锁的，读（独占），写（共享），读写（互斥）
+
+
+
+#### 反面例子
+
+以下代码没有加读写锁
+
+```java
+public class MyCacheNoLock {
+    /**
+     * volatile关键字可以查看前面的包
+     * 管缓存的，必须用volatile，保证可见性和禁止指令重排，一个线程对其进行了修改，必须让其它线程知道
+     */
+    private volatile Map<String, Object> map = new HashMap<>();
+
+    /**
+     * 写操作：原子+独占，整个写过程必须完整的统一体，不能被分割和打断
+     *
+     * @param key
+     * @param value
+     */
+    public void put(String key, Object value) {
+        System.out.println(Thread.currentThread().getName() + " 正在写入:" + "key:" + key + ",value:" + value);
+        // 暂定一会模拟网络延迟
+        try {
+            TimeUnit.MILLISECONDS.sleep(300);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        map.put(key, value);
+        System.out.println(Thread.currentThread().getName() + " 写入完成:" + "key:" + key + ",value:" + value);
+
+    }
+
+    public void get(String key) {
+        System.out.println(Thread.currentThread().getName() + " 正在读取:" + "key:" + key);
+        // 暂定一会模拟网络延迟
+        try {
+            TimeUnit.MILLISECONDS.sleep(300);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        Object result = map.get(key);
+        System.out.println(Thread.currentThread().getName() + " 读取完成:" + "key:" + key + ",result:" + result);
+    }
+
+    public void clearMap() {
+        map.clear();
+    }
+}
+```
+
+结果
+
+```pla
+0 正在写入:key:0,value:0
+2 正在写入:key:2,value:2
+1 正在写入:key:1,value:1
+4 正在写入:key:4,value:4
+3 正在写入:key:3,value:3
+0 正在读取:key:0
+1 正在读取:key:1
+2 正在读取:key:2
+3 正在读取:key:3
+4 正在读取:key:4
+3 写入完成:key:3,value:3
+2 写入完成:key:2,value:2
+4 写入完成:key:4,value:4
+1 写入完成:key:1,value:1
+0 写入完成:key:0,value:0
+0 读取完成:key:0,result:null   // 没有读取到
+1 读取完成:key:1,result:1
+3 读取完成:key:3,result:null
+2 读取完成:key:2,result:null
+4 读取完成:key:4,result:4
+```
+
+可以看到，还没有写入完成，就开始读取了，导致一些数据没有读取到。
 
