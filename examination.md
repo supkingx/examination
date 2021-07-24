@@ -1835,7 +1835,7 @@ JVM实现不采用这种方式了
 
 ## 2、CountDownLatch
 
-线程中的 一个计数器，可以指**定必须 减到0**的时候，才开始下面的线程
+线程中的 一个计数器，可以指定**必须 减到0**的时候，才开始下面的线程
 
 废话不多说，直接上代码
 
@@ -3002,4 +3002,168 @@ public class MyCacheNoLock {
 ```
 
 可以看到，还没有写入完成，就开始读取了，导致一些数据没有读取到。
+
+# 二十一、阻塞队列
+
+> 什么是阻塞队列？
+>
+> 当阻塞队列是空的时候，从队列中获取元素的操作将会被阻塞。
+>
+> 当阻塞队列是满的时候，往队列里添加元素的操作将会被阻塞。
+
+<img src="examination.assets/image-20210724210633344.png" alt="image-20210724210633344" style="zoom:50%;" />
+
+在多线程领域，所谓阻塞，在某些情况下会被挂起线程（即阻塞），一旦条件满足，被挂起的线程又会自动被唤醒。
+
+为什么需要blockingqueue？
+
+好处是我们不需要关心什么时候需要阻塞线程，什么时候需要唤醒线程，因为这一切blockingqueue都给包办了。
+
+在concurrent包发布以前，在多线程环境下，我们每个程序员都必须去自己控制这些细节，尤其还要兼顾效率和线程安全，而这回给我们的程序带来不小的复杂度。
+
+blockingqueue核心方法
+
+<img src="examination.assets/image-20210724211453363.png" alt="image-20210724211453363" style="zoom:50%;" />
+
+<img src="examination.assets/image-20210724214934844.png" alt="image-20210724214934844" style="zoom:50%;" />
+
+add：超过队列长度会报错，成功会返回true
+
+Element() 返回队首元素
+
+remove：移除 元素，没有元素可以移除则报错
+
+
+
+offset：插入成功true，失败false，不报错
+
+poll：取不到就返回null
+
+peek，取出队首元素，不报错
+
+
+
+put：只管插入没有返回值，当队列容量满时，则会等待（阻塞）
+
+take：取出元素并返回，当无元素可取时，则会等待
+
+
+
+Offer(e,time,unit)：插入后遇到队列已满，则会等待两秒，2秒之后还是队列满的状态，则返回false
+
+```java
+blockingQueue.offer("a", 2L, TimeUnit.SECONDS)
+```
+
+
+
+
+
+#### （1）队列分类
+
+ArrayBlockingQueue：由数组结构组成的有界阻塞队列
+
+LinkedBlockingQueue：由链表结构组成的有界（但大小默认值为Integer.MAX_VALUE）阻塞队列
+
+SynchronousQueue：不存储元素的阻塞队列，也即单个元素的队列。即只存储单个元素。
+
+。。。。。。。
+
+##### ArrayBlockingQueue
+
+```java
+public class BlockingQueueDemo {
+    public static void main(String[] args) {
+        BlockingQueue<Object> blockingQueue = new ArrayBlockingQueue<>(3);
+        System.out.println(blockingQueue.add("a"));
+        System.out.println(blockingQueue.add("b"));
+        System.out.println(blockingQueue.add("c"));
+        System.out.println(blockingQueue.add("x"));
+    }
+}
+```
+
+输出，第四个会报错，队列已满
+
+```
+true
+true
+true
+Exception in thread "main" java.lang.IllegalStateException: Queue full
+	at java.util.AbstractQueue.add(AbstractQueue.java:98)
+	at java.util.concurrent.ArrayBlockingQueue.add(ArrayBlockingQueue.java:312)
+	at com.supkingx.base.j_collection.Queue.BlockingQueueDemo.main(BlockingQueueDemo.java:20)
+```
+
+##### SynchronousQueue
+
+产生一个元素，消费一个元素。依次进行
+
+```java
+public class BlockingQueueDemo {
+    public static void main(String[] args) throws InterruptedException {
+//        BlockingQueue<Object> blockingQueue = new ArrayBlockingQueue<>(1);
+        BlockingQueue<Object> blockingQueue = new SynchronousQueue<>();
+        new Thread(()->{
+            try {
+                blockingQueue.put("1");
+                System.out.println(Thread.currentThread().getName()+"\t put 1");
+
+                blockingQueue.put("2");
+                System.out.println(Thread.currentThread().getName()+"\t put 2");
+
+                blockingQueue.put("3");
+                System.out.println(Thread.currentThread().getName()+"\t put 3");
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        },"AAA").start();
+
+        new Thread(()->{
+            try {
+                TimeUnit.SECONDS.sleep(5);
+                System.out.println(Thread.currentThread().getName()+"\t"+blockingQueue.take());
+
+                TimeUnit.SECONDS.sleep(5);
+                System.out.println(Thread.currentThread().getName()+"\t"+blockingQueue.take());
+
+                TimeUnit.SECONDS.sleep(5);
+                System.out.println(Thread.currentThread().getName()+"\t"+blockingQueue.take());
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        },"BBB").start();
+    }
+}
+
+输出结果：
+BBB	1
+AAA	 put 1
+BBB	2
+AAA	 put 2
+BBB	3
+AAA	 put 3
+```
+
+注意观察结果：
+
+blockingQueue.put("1");之后，会去BBB现场take()到该元素，然后回到AAA线程继续执行。
+
+即先put，再take，一次一个元素，依次执行。
+
+#### （2）阻塞队列有没有好的一面
+
+
+
+#### （3）不得不阻塞，你如何管理
+
+
+
+
+
+
+
+
+
+
 
