@@ -1671,9 +1671,19 @@ public class Demo02 {
 
 # 十一、JVM
 
-> https://www.bilibili.com/video/BV1PJ411n7xZ?spm_id_from=333.788.b_636f6d6d656e74.11
+## 1、栈、堆
+
+<img src="examination.assets/image-20210712210015091.png" alt="image-20210712210015091" style="zoom:50%;" />
+
+> 堆（heap）：存储对象、实例，和数组
 >
-> JVM垃圾回收机制，GC发生在JVM哪部分，有几种GC，它们的算法是什么
+> 栈（stack）：虚拟机栈。用于存储局部变量表。局部变量表存放了编译期可以知道长度的各种基本数据类型（boolean、byte、short、char、int、float、long、double）、对象引用（reference类型，存储对象在堆内存的首地址）。方法执行完自动释放。
+>
+> 方法区（Method Area）用于存储已被虚拟机加载的类信息、常量、静态常量、即时编译器编译后的代码等数据。
+
+例如Demo02 obj1 = new Demo02()，obj1在栈里面，new Demo02()在堆里面
+
+
 
 ## 1、GC是什么
 
@@ -2437,7 +2447,7 @@ sync = fair ? new FairSync() : new NonfairSync();
 
 对于synchronized而言，也是非公平的
 
-## 2、可重入锁
+## 2、可重入锁（又名递归锁）
 
 > 可重入锁（也叫递归锁）
 
@@ -2649,3 +2659,218 @@ BB--myUnLock()
 AA线程获取锁之后，等待5秒，在此期间BB线程想要获取锁，由于AA线程尚未释放锁，所以此时BB线程通过循环尝试获取锁。
 
 5秒之后，AA线程释放了锁，此时BB线程拿到了锁。
+
+## 4、独占锁(写锁)/共享锁(读锁)/互斥锁
+
+ 独占锁：指该锁一次只能被一个线程所持有。对ReentrantLock和Synchronized而言都是独占锁
+
+ 共享锁：指该锁可被多个线程所持有。
+
+ReentrantReadWriteLock其读锁是共享锁，其写锁是独占锁。
+读锁的共享锁可保证并发读是非常高效的，读写，写读，写写的过程是互斥的。
+
+> 通俗理解：机场大屏幕，每个人都能看到，这就是读共享；但是在在机场通知旅客飞机延误的只能是一个人，如果一群广播员播放，将会乱套，这就是独占写锁。同时在播报的时候，屏幕信息就不能信任，这就是互斥。
+>
+> 即
+>
+> 多个线程同时读一个资源类没有任何问题，所以为了满足并发量，读取共享资源应该可以同时进行。但是如果有一个线程想去写共享资源，就不应该再有其他线程可以对该资源进行读或写
+
+### 代码展示
+
+#### 正面例子
+
+共享缓存
+
+```java
+public class MyCache {
+    /**
+     * volatile关键字可以查看前面的包
+     * 管缓存的，必须用volatile，保证可见性和禁止指令重排，一个线程对其进行了修改，必须让其它线程知道
+     */
+    private volatile Map<String, Object> map = new HashMap<>();
+
+    /**
+     * 可以对比加了读写锁和没加读写锁的区别
+     */
+    private ReentrantReadWriteLock readWriteLock = new ReentrantReadWriteLock();
+
+    /**
+     * 写操作：原子+独占，整个写过程必须完整的统一体，不能被分割和打断
+     *
+     * @param key
+     * @param value
+     */
+    public void put(String key, Object value) {
+        readWriteLock.writeLock().lock();
+        try {
+            System.out.println(Thread.currentThread().getName() + " 正在写入:" + "key:" + key + ",value:" + value);
+            // 暂定一会模拟网络延迟
+            try {
+                TimeUnit.MILLISECONDS.sleep(300);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            map.put(key, value);
+            System.out.println(Thread.currentThread().getName() + " 写入完成:" + "key:" + key + ",value:" + value);
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            readWriteLock.writeLock().unlock();
+        }
+    }
+
+    public void get(String key) {
+        readWriteLock.readLock().lock();
+        try {
+            System.out.println(Thread.currentThread().getName() + " 正在读取:" + "key:" + key);
+            // 暂定一会模拟网络延迟
+            try {
+                TimeUnit.MILLISECONDS.sleep(300);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            Object result = map.get(key);
+            System.out.println(Thread.currentThread().getName() + " 读取完成:" + "key:" + key + ",result:" + result);
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            readWriteLock.readLock().unlock();
+        }
+    }
+
+    public void clearMap() {
+        map.clear();
+    }
+}
+```
+
+测试
+
+```java
+public class ReadWriteLockDemo {
+
+    public static void main(String[] args) {
+        MyCache myCache = new MyCache();
+
+        for (int i = 0; i < 5; i++) {
+            final int i1 = i;
+            new Thread(() -> {
+                myCache.put(i1 + "", i1 + "");
+            }, String.valueOf(i)).start();
+        }
+
+        for (int i = 0; i < 5; i++) {
+            final int i1 = i;
+            new Thread(() -> {
+                myCache.get(i1 + "");
+            }, String.valueOf(i)).start();
+        }
+    }
+}
+```
+
+结果
+
+```
+0 正在写入:key:0,value:0
+0 写入完成:key:0,value:0
+1 正在写入:key:1,value:1
+1 写入完成:key:1,value:1
+2 正在写入:key:2,value:2
+2 写入完成:key:2,value:2
+3 正在写入:key:3,value:3
+3 写入完成:key:3,value:3
+4 正在写入:key:4,value:4
+4 写入完成:key:4,value:4
+0 正在读取:key:0
+1 正在读取:key:1
+2 正在读取:key:2
+3 正在读取:key:3
+4 正在读取:key:4
+2 读取完成:key:2,result:2
+3 读取完成:key:3,result:3
+0 读取完成:key:0,result:0
+4 读取完成:key:4,result:4
+1 读取完成:key:1,result:1
+```
+
+可以很明显的看到，先写后读的，这样可以保证每次读到的数据都是最新的。展现了读写锁的，读（独占），写（共享），读写（互斥）
+
+
+
+#### 反面例子
+
+以下代码没有加读写锁
+
+```java
+public class MyCacheNoLock {
+    /**
+     * volatile关键字可以查看前面的包
+     * 管缓存的，必须用volatile，保证可见性和禁止指令重排，一个线程对其进行了修改，必须让其它线程知道
+     */
+    private volatile Map<String, Object> map = new HashMap<>();
+
+    /**
+     * 写操作：原子+独占，整个写过程必须完整的统一体，不能被分割和打断
+     *
+     * @param key
+     * @param value
+     */
+    public void put(String key, Object value) {
+        System.out.println(Thread.currentThread().getName() + " 正在写入:" + "key:" + key + ",value:" + value);
+        // 暂定一会模拟网络延迟
+        try {
+            TimeUnit.MILLISECONDS.sleep(300);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        map.put(key, value);
+        System.out.println(Thread.currentThread().getName() + " 写入完成:" + "key:" + key + ",value:" + value);
+
+    }
+
+    public void get(String key) {
+        System.out.println(Thread.currentThread().getName() + " 正在读取:" + "key:" + key);
+        // 暂定一会模拟网络延迟
+        try {
+            TimeUnit.MILLISECONDS.sleep(300);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        Object result = map.get(key);
+        System.out.println(Thread.currentThread().getName() + " 读取完成:" + "key:" + key + ",result:" + result);
+    }
+
+    public void clearMap() {
+        map.clear();
+    }
+}
+```
+
+结果
+
+```pla
+0 正在写入:key:0,value:0
+2 正在写入:key:2,value:2
+1 正在写入:key:1,value:1
+4 正在写入:key:4,value:4
+3 正在写入:key:3,value:3
+0 正在读取:key:0
+1 正在读取:key:1
+2 正在读取:key:2
+3 正在读取:key:3
+4 正在读取:key:4
+3 写入完成:key:3,value:3
+2 写入完成:key:2,value:2
+4 写入完成:key:4,value:4
+1 写入完成:key:1,value:1
+0 写入完成:key:0,value:0
+0 读取完成:key:0,result:null   // 没有读取到
+1 读取完成:key:1,result:1
+3 读取完成:key:3,result:null
+2 读取完成:key:2,result:null
+4 读取完成:key:4,result:4
+```
+
+可以看到，还没有写入完成，就开始读取了，导致一些数据没有读取到。
+
