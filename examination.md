@@ -1827,6 +1827,135 @@ JVM实现不采用这种方式了
 >
 > 并行：多个事情同时做：一边泡面一遍看书一边泡脚。。。。。
 
+## 1、volatile
+
+参考后面介绍
+
+
+
+## 2、CountDownLatch
+
+线程中的 一个计数器，可以指**定必须 减到0**的时候，才开始下面的线程
+
+废话不多说，直接上代码
+
+### 没有用CountDownLatch
+
+```java
+// 必须等上自习的同学全部离开后，班长才能关门
+public class CountDownLatchDemo {
+    public static void main(String[] args) {
+
+        for (int i = 0; i < 6; i++) {
+            new Thread(()->{
+                System.out.println(Thread.currentThread().getName()+"\t上完自习，离开教室");
+            }).start();
+        }
+        System.out.println(Thread.currentThread().getName()+"-----班长最后关门走人");
+    }
+}
+```
+
+结果如下，main线程并没有等到最后才执行
+
+```
+Thread-0	上完自习，离开教室
+Thread-2	上完自习，离开教室
+Thread-1	上完自习，离开教室
+Thread-3	上完自习，离开教室
+main-----班长最后关门走人
+Thread-4	上完自习，离开教室
+Thread-5	上完自习，离开教室
+```
+
+#### 用了CountDownLatch
+
+完美实现
+
+```java
+public class CountDownLatchDemo {
+    public static void main(String[] args) throws InterruptedException {
+        CountDownLatch countDownLatch = new CountDownLatch(6);
+        for (int i = 0; i < 6; i++) {
+            new Thread(()->{
+                System.out.println(Thread.currentThread().getName()+"\t上完自习，离开教室");
+                countDownLatch.countDown();
+            }).start();
+        }
+        // 等countDownLatch到0，才执行
+        countDownLatch.await();
+        System.out.println(Thread.currentThread().getName()+"-----班长最后关门走人");
+    }
+}
+```
+
+结果
+
+```
+Thread-0	上完自习，离开教室
+Thread-2	上完自习，离开教室
+Thread-1	上完自习，离开教室
+Thread-4	上完自习，离开教室
+Thread-3	上完自习，离开教室
+Thread-5	上完自习，离开教室
+main-----班长最后关门走人
+```
+
+## 2、CyclicBarrier
+
+与CountDownLatch功能相反。没执行一次则加一，直至累计到指定的数量
+
+```java
+public class CyclicBarrierDemo {
+    public static void main(String[] args) throws BrokenBarrierException, InterruptedException {
+        CyclicBarrier cyclicBarrier = new CyclicBarrier(7, () -> System.out.println("召唤神龙"));
+        for (int i = 1; i <= 7; i++) {
+            final int i1 = i;
+            new Thread(() -> {
+                System.out.println(Thread.currentThread().getName() + "收集到第 " + i1 + " 颗龙珠");
+                try {
+                    cyclicBarrier.await();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                } catch (BrokenBarrierException e) {
+                    e.printStackTrace();
+                }
+            }).start();
+        }
+    }
+}
+```
+
+## 3、SemaphoreDemo
+
+信号量主要用于两个目的，一个是用于多个共享资源的互斥使用，另一个用于并发线程数的控制。
+
+话不多说，直接上代码
+
+```java
+public class SemaphoreDemo {
+    public static void main(String[] args) {
+        Semaphore semaphore = new Semaphore(3);
+        for (int i = 0; i < 6; i++) {
+            new Thread(() -> {
+                try {
+                    semaphore.acquire();
+                    System.out.println(Thread.currentThread().getName()+"\t抢车位");
+                    TimeUnit.SECONDS.sleep(3);
+                    System.out.println(Thread.currentThread().getName()+"\t停车3秒后离开车位");
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                } finally {
+                    semaphore.release();
+                }
+            }, String.valueOf(i)).start();
+        }
+    }
+}
+```
+
+semaphore可以控制并发数，设置最多3线程抢车位，抢到车位信号量-1，离开车位后信号量+1。
+
 
 
 
