@@ -1,10 +1,10 @@
-package com.supkingx.base.l_thread.semaphore;
+package com.supkingx.base.f_thread.semaphore;
 
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 /**
- * @description:
+ * @description: 每次减一
  * @Author: wangchao
  * @Date: 2021/7/24
  */
@@ -14,6 +14,7 @@ public class SemaphoreDemo {
         for (int i = 0; i < 6; i++) {
             new Thread(() -> {
                 try {
+                    // 加1
                     semaphore.acquire();
                     System.out.println(Thread.currentThread().getName()+"\t抢车位");
                     TimeUnit.SECONDS.sleep(3);
@@ -21,6 +22,7 @@ public class SemaphoreDemo {
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 } finally {
+                    // 减1
                     semaphore.release();
                 }
             }, String.valueOf(i)).start();
