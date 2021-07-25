@@ -3055,11 +3055,7 @@ Offer(e,time,unit)：插入后遇到队列已满，则会等待两秒，2秒之�
 blockingQueue.offer("a", 2L, TimeUnit.SECONDS)
 ```
 
-
-
-
-
-#### （1）队列分类
+## 1、队列分类
 
 ArrayBlockingQueue：由数组结构组成的有界阻塞队列
 
@@ -3069,7 +3065,7 @@ SynchronousQueue：不存储元素的阻塞队列，也即单个元素的队列�
 
 。。。。。。。
 
-##### ArrayBlockingQueue
+### ArrayBlockingQueue
 
 ```java
 public class BlockingQueueDemo {
@@ -3095,7 +3091,7 @@ Exception in thread "main" java.lang.IllegalStateException: Queue full
 	at com.supkingx.base.j_collection.Queue.BlockingQueueDemo.main(BlockingQueueDemo.java:20)
 ```
 
-##### SynchronousQueue
+### SynchronousQueue
 
 产生一个元素，消费一个元素。依次进行
 
@@ -3151,11 +3147,11 @@ blockingQueue.put("1");之后，会去BBB现场take()到该元素，然后回到
 
 即先put，再take，一次一个元素，依次执行。
 
-#### （2）阻塞队列有没有好的一面
+## 2、用在什么地方
+
+### 消费者模式
 
 
-
-#### （3）不得不阻塞，你如何管理
 
 
 
