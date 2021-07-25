@@ -1635,6 +1635,100 @@ public class Demo02 {
 
 > 面向切面：不修改源代码进行功能的增强
 
+### 优先级
+
+- 前置通知 (@Before) 。
+- 返回通知 (@AfterReturning) 。
+- 异常通知 (@AfterThrowing) 。
+- 后置通知 (@After)。
+- 环绕通知 (@Around) :（优先级最高）
+
+```java
+@Aspect
+@Component
+public class SysTimeAspect {
+
+ /**
+  * 切入点
+  */
+ @Pointcut("bean(sysMenuServiceImpl)")
+ public void doTime(){}
+
+ @Before("doTime()")
+ public void doBefore(JoinPoint jp){
+  System.out.println("time doBefore()");
+ }
+ @After("doTime()")
+ public void doAfter(){//类似于finally{}代码块
+  System.out.println("time doAfter()");
+ }
+ /**核心业务正常结束时执行
+  * 说明：假如有after，先执行after,再执行returning*/
+ @AfterReturning("doTime()")
+ public void doAfterReturning(){
+  System.out.println("time doAfterReturning");
+ }
+ /**核心业务出现异常时执行
+  * 说明：假如有after，先执行after,再执行Throwing*/
+ @AfterThrowing("doTime()")
+ public void doAfterThrowing(){
+  System.out.println("time doAfterThrowing");
+ }
+ @Around("doTime()")
+ public Object doAround(ProceedingJoinPoint jp)
+   throws Throwable{
+  System.out.println("doAround.before");
+  try {
+  Object obj=jp.proceed();
+  return obj;
+  }catch(Throwable e) {
+  System.out.println("doAround.error-->"+e.getMessage());
+  throw e;
+  }finally {
+  System.out.println("doAround.after");
+  }
+ }
+}
+```
+
+<img src="examination.assets/image-20210725163748073.png" alt="image-20210725163748073" style="zoom:33%;" />
+
+
+
+<img src="examination.assets/image-20210725163806831.png" alt="image-20210725163806831" style="zoom:33%;" />
+
+
+
+总结
+
+> around优先级最高，afterThrowing在after之后
+
+### boot1和boot2对AOP顺序的影响
+
+> boot1对应spring4，boot2对应spring5
+
+<img src="examination.assets/image-20210725170614051.png" alt="image-20210725170614051" style="zoom:33%;" />
+
+<img src="examination.assets/image-20210725170658608.png" alt="image-20210725170658608" style="zoom:33%;" />
+
+spring4和spring5的AOP顺序对比结果
+
+<img src="examination.assets/image-20210725171103538.png" alt="image-20210725171103538" style="zoom:50%;" />
+
+综上图中可以看到，spring5之后，@After的优先级被放到（@afterReturn和@AfterThrowing）之后了，@Around的环绕后通知被置到最后
+
+
+
+## 4、TX（事务）
+
+
+
+
+
+## 5、循环依赖
+
+多个bea之间相互依赖，形成了一个闭环
+
 
 
 
@@ -1833,7 +1927,7 @@ JVM实现不采用这种方式了
 
 
 
-## 2、CountDownLatch
+## 3、CountDownLatch
 
 线程中的 一个计数器，可以指定**必须 减到0**的时候，才开始下面的线程
 
@@ -1956,7 +2050,15 @@ public class SemaphoreDemo {
 
 semaphore可以控制并发数，设置最多3线程抢车位，抢到车位信号量-1，离开车位后信号量+1。
 
+## 5、Atomic原子类
 
+详细介绍可以看后面的CAS章节
+
+
+
+## 6、lock
+
+详细介绍看后面的阻塞队列之消费者模式
 
 
 
@@ -2576,6 +2678,8 @@ sync = fair ? new FairSync() : new NonfairSync();
 
 对于synchronized而言，也是非公平的
 
+> lock和synchronized有什么区别，具体参照下边的阻塞队列章节中的介绍
+
 ## 2、可重入锁（又名递归锁）
 
 > 可重入锁（也叫递归锁）
@@ -3003,6 +3107,128 @@ public class MyCacheNoLock {
 
 可以看到，还没有写入完成，就开始读取了，导致一些数据没有读取到。
 
+## 5、小题练习
+
+1、多线程之间按照顺序调用，实现A->B->C 三个线程启动，要求如下：
+
+​		AA打印5次，BB打印10次，CC打印15次；紧接着，AA打印5次，BB打印10次，CC打印15次。。。。。依次来十轮
+
+```java
+public class ShareResource {
+    private int number = 1; // a:1 b:2 c:3
+    private Lock lock = new ReentrantLock();
+    private Condition c1 = lock.newCondition();
+    private Condition c2 = lock.newCondition();
+    private Condition c3 = lock.newCondition();
+    // a干完后等待，唤起b
+    public void print5() {
+        lock.lock();
+        try {
+            // 1、判断
+            while (number != 1) {
+                c1.await();
+            }
+            // 2、干活
+            for (int i = 0; i < 5; i++) {
+                System.out.println(Thread.currentThread().getName() + "\t" + i);
+            }
+            // 3、通知
+            number=2;
+            c2.signal();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    // b干完后等待，唤起c
+    public void print10() {
+        lock.lock();
+        try {
+            // 1、判断
+            while (number != 2) {
+                c2.await();
+            }
+            // 2、干活
+            for (int i = 0; i < 10; i++) {
+                System.out.println(Thread.currentThread().getName() + "\t" + i);
+            }
+            // 3、通知
+            number=3;
+            c3.signal();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    // c干完后等待，唤起a
+    public void print15() {
+        lock.lock();
+        try {
+            // 1、判断
+            while (number != 3) {
+                c3.await();
+            }
+            // 2、干活
+            for (int i = 0; i < 15; i++) {
+                System.out.println(Thread.currentThread().getName() + "\t" + i);
+            }
+            // 3、通知
+            number=1;
+            c1.signal();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            lock.unlock();
+        }
+    }
+}
+```
+
+```java
+/**
+ * @description:多线程之间按照顺序调用，实现A->B->C 三个线程启动，要求如下：
+ * <p>
+ * AA打印5次，BB打印10次，CC打印5次；
+ * 紧接着，
+ * AA打印5次，BB打印10次，CC打印15次
+ * 。。。。。依次来十轮
+ * @Author: wangchao
+ * @Date: 2021/7/25
+ */
+public class Test01 {
+    public static void main(String[] args) {
+        ShareResource shareResource = new ShareResource();
+        // A线程循环了10次，但是第一个循环执行完后便进入的wait阶段，并唤起B,后面9次循环都没开始
+        new Thread(()->{
+            for (int i = 0; i < 10; i++) {
+                shareResource.print5();
+            }
+        },"A").start();
+        // B第一次循环直接进入wait，等被A唤醒后，完成第一次循环，并唤起C,后面9次循环都没开始
+        new Thread(()->{
+            for (int i = 0; i < 10; i++) {
+                shareResource.print10();
+            }
+        },"B").start();
+
+        // C第一次循环直接进入wait，等被B唤醒后，完成第一次循环，并唤起A,后面9次循环都没开始
+        new Thread(()->{
+            for (int i = 0; i < 10; i++) {
+                shareResource.print15();
+            }
+        },"C").start();
+    }
+}
+```
+
+
+
+
+
 # 二十一、阻塞队列
 
 > 什么是阻塞队列？
@@ -3151,13 +3377,245 @@ blockingQueue.put("1");之后，会去BBB现场take()到该元素，然后回到
 
 ### 消费者模式
 
+另外一种实现方式，参考二十二章总结的部分
+
+> ```
+> 一个初始值为零的变量，两个线程对其交替操作，一个+1，一个-1，来5轮
+> ```
+
+首先定义一个资源类
+
+```java
+public class ShareData {
+
+    private int number = 0;
+    private Lock lock = new ReentrantLock();
+    private Condition condition = lock.newCondition();
+
+    public void increment() {
+        lock.lock();
+        try {
+            // 1、判断
+            while (number != 0) {
+                condition.await();
+            }
+            // 2、干活
+            number++;
+            System.out.println(Thread.currentThread().getName() + "\t" + number);
+            // 3、通知唤醒
+            condition.signalAll();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void decrement() {
+        lock.lock();
+        try {
+            // 1、判断
+            while (number == 0) {
+                condition.await();
+            }
+            // 2、干活
+            number--;
+            System.out.println(Thread.currentThread().getName() + "\t" + number);
+            // 3、通知唤醒
+            condition.signalAll();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            lock.unlock();
+        }
+    }
+}
+```
+
+测试
+
+```java
+public class ProducerAndConsumer {
+    public static void main(String[] args) {
+        final ShareData shareData = new ShareData();
+        new Thread(()->{
+            for (int i = 0; i < 5; i++) {
+                shareData.increment();
+            }
+        },"AA").start();
+
+        new Thread(()->{
+            for (int i = 0; i < 5; i++) {
+                shareData.decrement();
+            }
+        },"BB").start();
+    }
+}
+```
+
+#### 总结
+
+之前是在synchronized中使用唤醒和等待，现在JUC包中的lock也可以使用唤醒和等待
+
+<img src="examination.assets/image-20210725100114891.png" alt="image-20210725100114891" style="zoom:33%;" />
+
+##### Synchronized和lock有什么区别
+
+1、原始构成
+
+- synchronized是关键字属于JVM层面
+  - 底层由monitorenter、monitorexit实现（通过monitor对象完成，其实wait/notify等方法也依赖monitor对象，所以只有在同步块或方法中才能调用wait/nofity等方法）
+
+<img src="examination.assets/image-20210725101711365.png" alt="image-20210725101711365" style="zoom:33%;" />
+
+- Lock是具体类（JUC包下的）是API层面的
+
+2、使用方法
+
+- synchronized：不需要手动去释放锁，当synchronized代码执行完后系统会自动让线程释放锁的占用
+- ReentrantLock：需要用户去手动释放锁，若没有主动释放锁，就有可能导致死锁。
+
+3、等待是否可中断
+
+- synchronized：不可中断，除非抛出异常或正常运行完成。
+- ReentrantLock：可中断，1、设置超时方法，trylock（timeout，timeunit unit）2、LockInterruptibly（）放代码块中，调用interrupt（）方法可中断。
+
+4、是否公平
+
+- synchronized：非公平锁
+- ReentrantLock：可公平、可不公平，默认非公平，构造方法传入true则变成公平
+
+5、锁绑定多个条件Condition
+
+- synchronized：没有
+- ReentrantLock：用来实现分组唤醒需要唤醒的线程，可以精确唤醒，而不是像synchronized那样要么随机唤醒，要么唤醒全部线程
+
+# 二十二、十七至二十一的小总结
+
+volatile/cas/atomicInteger/blockqueue/线程交互/原子引用
+
+## 写一个消费者生产者
+
+定义资源类
+
+```java
+public class MyResource {
+    // 利用volatile修饰，提高可见性
+    private volatile boolean FLAG = true; // 默认开启，进行生产+消费
+    private AtomicInteger atomicInteger = new AtomicInteger();
+
+    BlockingQueue<String> blockingQueue = null;
+
+    public MyResource(BlockingQueue<String> blockingQueue) {
+        this.blockingQueue = blockingQueue;
+        System.out.println(blockingQueue.getClass().getName());
+    }
+
+    public void myProd() throws InterruptedException {
+        String data = null;
+        boolean retValue;
+        while (FLAG) {
+          // 获取数据塞入队列
+            data = atomicInteger.incrementAndGet() + "";
+            // 向队列添加数据，队列满了则等待2秒
+            retValue = blockingQueue.offer(data, 2L, TimeUnit.SECONDS);
+            if (retValue) {
+                System.out.println(Thread.currentThread().getName() + "\t 插入队列" + data + "成功");
+            } else {
+                System.out.println(Thread.currentThread().getName() + "\t 插入队列" + data + "失败");
+            }
+            // 降低生产频率，给消费以时间
+            TimeUnit.MILLISECONDS.sleep(500);
+        }
+        System.out.println(Thread.currentThread().getName() + "\t大老板叫停了，表示FLAG=false,生产动作结束");
+    }
+
+    public void myConsumer() throws InterruptedException {
+        String result = null;
+        while (FLAG) {
+            // 2s取不到，就不取了
+            result = blockingQueue.poll(2L, TimeUnit.SECONDS);
+            if (null == result || result.equalsIgnoreCase("")) {
+                FLAG = false;
+                System.out.println(Thread.currentThread().getName() + "\t 超过2s没取到");
+                System.out.println();
+                System.out.println();
+                return;
+            }
+            System.out.println(Thread.currentThread().getName() + "\t 消费队列" + result + "成功");
+        }
+    }
+
+    public void stop() {
+        this.FLAG = false;
+    }
+}
+```
+
+```java
+public class ProdConsumer {
+    public static void main(String[] args) {
+      	// 定义队列容量大小为10，超过10则插入失败
+        MyResource myResource = new MyResource(new ArrayBlockingQueue<>(10));
+        new Thread(()->{
+            System.out.println(Thread.currentThread().getName()+"生产线程启动");
+            try {
+                myResource.myProd();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        },"prod").start();
+
+        new Thread(()->{
+            System.out.println(Thread.currentThread().getName()+"消费线程启动");
+            try {
+                myResource.myConsumer();
+                System.out.println();
+                System.out.println();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        },"consumer").start();
+
+        try {
+            TimeUnit.SECONDS.sleep(5);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        System.out.println();
+        System.out.println();
+        System.out.println();
+        System.out.println("5秒钟时间到，大老板main线程叫停，活动结束");
+        myResource.stop();
+    }
+}
+```
+
+产出结果
+
+```
+java.util.concurrent.ArrayBlockingQueue
+prod生产线程启动
+consumer消费线程启动
+prod	 插入队列1成功
+consumer	 消费队列1成功
+prod	 插入队列2成功
+consumer	 消费队列2成功
+prod	 插入队列3成功
+consumer	 消费队列3成功
+prod	 插入队列4成功
+consumer	 消费队列4成功
+prod	 插入队列5成功
+consumer	 消费队列5成功
 
 
 
+5秒钟时间到，大老板main线程叫停，活动结束
+prod	大老板叫停了，表示FLAG=false,生产动作结束
+consumer	 超过2s没取到
+```
 
-
-
-
+# 二十三、多线程
 
 
 

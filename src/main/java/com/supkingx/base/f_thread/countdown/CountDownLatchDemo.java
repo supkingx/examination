@@ -1,4 +1,4 @@
-package com.supkingx.base.l_thread.countdown;
+package com.supkingx.base.f_thread.countdown;
 
 import java.util.concurrent.CountDownLatch;
 
