@@ -1644,100 +1644,9 @@ public class Demo02 {
 
 # 十一、JVM
 
-## 1、栈、堆
+## 
 
-<img src="examination.assets/image-20210712210015091.png" alt="image-20210712210015091" style="zoom:50%;" />
-
-> 堆（heap）：存储对象、实例，和数组
->
-> 栈（stack）：虚拟机栈。用于存储局部变量表。局部变量表存放了编译期可以知道长度的各种基本数据类型（boolean、byte、short、char、int、float、long、double）、对象引用（reference类型，存储对象在堆内存的首地址）。方法执行完自动释放。
->
-> 方法区（Method Area）用于存储已被虚拟机加载的类信息、常量、静态常量、即时编译器编译后的代码等数据。
-
-例如Demo02 obj1 = new Demo02()，obj1在栈里面，new Demo02()在堆里面
-
-
-
-## 1、GC是什么
-
-GC是指分代收集算法
-
-- 在次数上频繁收集Young区的是Minor GC
-- 在次数上较少收集Old区   Full GC
-- 基本不动Perm区
-
-Young区是干嘛的？
-
-
-
-Old区是干嘛的？
-
-
-
-## 2、GC 发生在JVM哪部分
-
-> 发生在堆里，堆就是内存里面
-
-<img src="examination.assets/image-20210712225800870.png" alt="image-20210712225800870" style="zoom:33%;" />
-
-
-
-
-
-## 3、GC 4大算法
-
-### 1、引用计数法
-
-有对象被引用就不回收
-
-缺点：每次对象赋值均要维护计数器，且计数器本身也有一定的消耗，较难处理循环引用
-
-JVM实现不采用这种方式了
-
-### 2、复制算法（Copying）
-
-年轻代中使用的是Minor GC，这种GC算法采用的是复制算法（Copying）
-
-#### 原理
-
-- 从根集合（GC Root）开始，通过Tracing从From中找到存活的对象，拷贝到To中。
-- From、To交换身份，下次内存分类从To开始
-
-#### 缺点
-
-需要双倍空间
-
-#### 优点
-
-没有标记清除过程，效率高
-
-没有内存碎片，可以实现快速内存分配（bump-the-pointer）
-
-### 3、标记清除（Mark-Sweep）
-
-老年代回收使用
-
-<img src="examination.assets/image-20210712225210793.png" alt="image-20210712225210793" style="zoom: 33%;" />
-
-
-
-
-
-### 4、标记压缩（Mark-Compact）
-
-老年代回收使用
-
-<img src="examination.assets/image-20210712225320150.png" alt="image-20210712225320150" style="zoom:50%;" />
-
-### 5、标记清除压缩（Mark-Sweep-Compact）
-
-两种算法(Mark-Sweep和Mark-Compact)结合使用的，先进行标记清除，清除一些产生一些碎片后再进行压缩
-
-老年代常用这种方式回收对象
-
-## 4、老年代和新生代
-
-
+看另外一个文件jvm.md
 
 
 
@@ -1748,6 +1657,7 @@ JVM实现不采用这种方式了
 他们都是基于Lucene搜索服务器基础之上开发的一款优秀的高性能的企业级搜索服务器。【他们都是基于分词技术构建的倒排索引的方式进行查询】
 
 - 开发语言：java语言开发
+- 
 - Solr：2004年诞生
 - Es：2010年诞生
 - 当实时建立索引的时候，solr会产生io阻塞，而es则不会，es查询性能高于solr。
@@ -3702,5 +3612,5 @@ Found 1 deadlock.
 # 二十四、jdk的bin包下的小功能
 
 JPS：可以看本机中java的后台运行程序
-jstack：
+jstack：见上面
 
