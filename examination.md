@@ -111,7 +111,32 @@ public class SafeDemo2 {
         }
     }
 }
+
 ```
+
+这个方法会返回一个新的同步list，如下。
+
+```java
+ public static <T> List<T> synchronizedList(List<T> list) {
+        return (list instanceof RandomAccess ?
+                new SynchronizedRandomAccessList<>(list) :
+                new SynchronizedList<>(list));
+    }
+```
+
+该方法的新建和查询有一个互斥锁**（mutex）**，每次只能要么查询要么新建
+
+```java
+public boolean add(E e) {
+            synchronized (mutex) {return c.add(e);}
+}
+
+ public E get(int index) {
+            synchronized (mutex) {return list.get(index);}
+ }
+```
+
+
 
 2、使用java.util.concurrent包中的CopyOnWriteArrayList，写时复制
 
@@ -145,6 +170,10 @@ public boolean add(E e) {
     } finally {
         lock.unlock();
     }
+}
+
+public E get(int index) {
+        return get(getArray(), index);
 }
 ```
 
