@@ -1610,128 +1610,7 @@ public class Demo02 {
 
 # 七、Spring系列
 
-## 1、Sping Bean作用域
-
-> 默认情况下Sping只为每个在IOC容器里面声明的bean创建唯一一个实例，整个IOC容器范围内只能共享该实例，该作用域被称为singleton
-
-- singleton 在SpingIOC容器中仅存在一个bean实例，Bean以单实例的方式存在
-- prototype 每次调用getBean()时都会返回一个新的实例
-- request 每次Http请求都会创建一个新的Bean，该作用域仅适用于WebApplicationContext环境
-- session 同一个HTTP Session共享一个bean，不同的HTTP Session适用不同的Bean。该作用域仅适用于WebApplicationContext环境。
-
-## 2、IOC 
-
-> 控制反转，把创建对象的过程交给Spring进行管理
-
-
-
-
-
-
-
-
-
-## 3、AOP
-
-> 面向切面：不修改源代码进行功能的增强
-
-### 优先级
-
-- 前置通知 (@Before) 。
-- 返回通知 (@AfterReturning) 。
-- 异常通知 (@AfterThrowing) 。
-- 后置通知 (@After)。
-- 环绕通知 (@Around) :（优先级最高）
-
-```java
-@Aspect
-@Component
-public class SysTimeAspect {
-
- /**
-  * 切入点
-  */
- @Pointcut("bean(sysMenuServiceImpl)")
- public void doTime(){}
-
- @Before("doTime()")
- public void doBefore(JoinPoint jp){
-  System.out.println("time doBefore()");
- }
- @After("doTime()")
- public void doAfter(){//类似于finally{}代码块
-  System.out.println("time doAfter()");
- }
- /**核心业务正常结束时执行
-  * 说明：假如有after，先执行after,再执行returning*/
- @AfterReturning("doTime()")
- public void doAfterReturning(){
-  System.out.println("time doAfterReturning");
- }
- /**核心业务出现异常时执行
-  * 说明：假如有after，先执行after,再执行Throwing*/
- @AfterThrowing("doTime()")
- public void doAfterThrowing(){
-  System.out.println("time doAfterThrowing");
- }
- @Around("doTime()")
- public Object doAround(ProceedingJoinPoint jp)
-   throws Throwable{
-  System.out.println("doAround.before");
-  try {
-  Object obj=jp.proceed();
-  return obj;
-  }catch(Throwable e) {
-  System.out.println("doAround.error-->"+e.getMessage());
-  throw e;
-  }finally {
-  System.out.println("doAround.after");
-  }
- }
-}
-```
-
-<img src="examination.assets/image-20210725163748073.png" alt="image-20210725163748073" style="zoom:33%;" />
-
-
-
-<img src="examination.assets/image-20210725163806831.png" alt="image-20210725163806831" style="zoom:33%;" />
-
-
-
-总结
-
-> around优先级最高，afterThrowing在after之后
-
-### boot1和boot2对AOP顺序的影响
-
-> boot1对应spring4，boot2对应spring5
-
-<img src="examination.assets/image-20210725170614051.png" alt="image-20210725170614051" style="zoom:33%;" />
-
-<img src="examination.assets/image-20210725170658608.png" alt="image-20210725170658608" style="zoom:33%;" />
-
-spring4和spring5的AOP顺序对比结果
-
-<img src="examination.assets/image-20210725171103538.png" alt="image-20210725171103538" style="zoom:50%;" />
-
-综上图中可以看到，spring5之后，@After的优先级被放到（@afterReturn和@AfterThrowing）之后了，@Around的环绕后通知被置到最后
-
-
-
-## 4、TX（事务）
-
-
-
-
-
-## 5、循环依赖
-
-多个bea之间相互依赖，形成了一个闭环
-
-
-
-
+参考另外一篇markdown文章
 
 
 
@@ -1765,100 +1644,9 @@ spring4和spring5的AOP顺序对比结果
 
 # 十一、JVM
 
-## 1、栈、堆
+## 
 
-<img src="examination.assets/image-20210712210015091.png" alt="image-20210712210015091" style="zoom:50%;" />
-
-> 堆（heap）：存储对象、实例，和数组
->
-> 栈（stack）：虚拟机栈。用于存储局部变量表。局部变量表存放了编译期可以知道长度的各种基本数据类型（boolean、byte、short、char、int、float、long、double）、对象引用（reference类型，存储对象在堆内存的首地址）。方法执行完自动释放。
->
-> 方法区（Method Area）用于存储已被虚拟机加载的类信息、常量、静态常量、即时编译器编译后的代码等数据。
-
-例如Demo02 obj1 = new Demo02()，obj1在栈里面，new Demo02()在堆里面
-
-
-
-## 1、GC是什么
-
-GC是指分代收集算法
-
-- 在次数上频繁收集Young区的是Minor GC
-- 在次数上较少收集Old区   Full GC
-- 基本不动Perm区
-
-Young区是干嘛的？
-
-
-
-Old区是干嘛的？
-
-
-
-## 2、GC 发生在JVM哪部分
-
-> 发生在堆里，堆就是内存里面
-
-<img src="examination.assets/image-20210712225800870.png" alt="image-20210712225800870" style="zoom:33%;" />
-
-
-
-
-
-## 3、GC 4大算法
-
-### 1、引用计数法
-
-有对象被引用就不回收
-
-缺点：每次对象赋值均要维护计数器，且计数器本身也有一定的消耗，较难处理循环引用
-
-JVM实现不采用这种方式了
-
-### 2、复制算法（Copying）
-
-年轻代中使用的是Minor GC，这种GC算法采用的是复制算法（Copying）
-
-#### 原理
-
-- 从根集合（GC Root）开始，通过Tracing从From中找到存活的对象，拷贝到To中。
-- From、To交换身份，下次内存分类从To开始
-
-#### 缺点
-
-需要双倍空间
-
-#### 优点
-
-没有标记清除过程，效率高
-
-没有内存碎片，可以实现快速内存分配（bump-the-pointer）
-
-### 3、标记清除（Mark-Sweep）
-
-老年代回收使用
-
-<img src="examination.assets/image-20210712225210793.png" alt="image-20210712225210793" style="zoom: 33%;" />
-
-
-
-
-
-### 4、标记压缩（Mark-Compact）
-
-老年代回收使用
-
-<img src="examination.assets/image-20210712225320150.png" alt="image-20210712225320150" style="zoom:50%;" />
-
-### 5、标记清除压缩（Mark-Sweep-Compact）
-
-两种算法(Mark-Sweep和Mark-Compact)结合使用的，先进行标记清除，清除一些产生一些碎片后再进行压缩
-
-老年代常用这种方式回收对象
-
-## 4、老年代和新生代
-
-
+看另外一个文件jvm.md
 
 
 
@@ -1869,6 +1657,7 @@ JVM实现不采用这种方式了
 他们都是基于Lucene搜索服务器基础之上开发的一款优秀的高性能的企业级搜索服务器。【他们都是基于分词技术构建的倒排索引的方式进行查询】
 
 - 开发语言：java语言开发
+- 
 - Solr：2004年诞生
 - Es：2010年诞生
 - 当实时建立索引的时候，solr会产生io阻塞，而es则不会，es查询性能高于solr。
@@ -3617,7 +3406,211 @@ consumer	 超过2s没取到
 
 # 二十三、多线程
 
+获得多线程的四种你方式
+A extends Thread ，new  a()然后使用start
+implement Runable，然后new Thread(runable).start()
+implements Callable<Integer>,然后 new FutureTask(TestCallable)，然后new Thread(futureTask).start();
+通过线程池
+
+## 1、线程池
+
+```
+线程生命周期：新生、就绪、运行、死亡
+* 线程池是为了节省新生、就绪、死亡的时间
+```
+
+> 为什么用线程池，及其优势：
+>
+> <img src="examination.assets/image-20210725230510096.png" alt="image-20210725230510096" style="zoom:33%;" />
+
+- Executors.newFixedThreadPool(3); 固定线程数
+
+  不允许用，底层用的LinkBlockingQueue（）无限长度，Integer.MAX_VALUE，容易堆积大量请求，造成OOM。
+
+- Executors.newSingleThreadExecutor(); 一池单线程
+
+  不允许用，底层用的LinkBlockingQueue（）无限长度，Integer.MAX_VALUE，容易堆积大量请求，造成OOM。
+
+- Executors.newCachedThreadPool();  无限线程
+
+  不允许使用，底层创建大量线程，Integer.MAX_VALUE，容易堆积大量请求，造成OOM。
+
+- Executors.newScheduledThreadPool(3); 可计划执行任务，例如选择三秒收执行
+
+  不允许使用，底层创建大量线程，Integer.MAX_VALUE，容易堆积大量请求，造成OOM。
+
+  ```java
+  public class newScheduledThreadPoolTest {
+      public static void main(String[] args) {
+          ScheduledExecutorService executorService = Executors.newScheduledThreadPool(3);
+          for (int i = 0; i < 100; i++) {
+              executorService.schedule(new Runnable() {
+                  @Override
+                  public void run() {
+                      System.out.println(Thread.currentThread().getName());
+                  }
+                  // 三秒后执行
+              }, 3, TimeUnit.SECONDS);
+          }
+          executorService.shutdown();
+      }
+  }
+  ```
+
+上诉线程的底层实现
+
+<img src="examination.assets/image-20210726000750750.png" alt="image-20210726000750750" style="zoom:33%;" />
+
+### 线程池7大参数
+
+```java
+public ThreadPoolExecutor(int corePoolSize, //常驻核心线程（必定干活的）
+                          int maximumPoolSize, //线程池能够容纳的最大线程数（包含核心线程）
+                          long keepAliveTime, //多余的空闲线程（超过corePoolSize数量的线程）的存活时间
+                          TimeUnit unit, // 时间单位
+                          BlockingQueue<Runnable> workQueue, //等待区
+                          ThreadFactory threadFactory, // 线程工厂，用于创建线程的一些属性，例如名称
+                          RejectedExecutionHandler handler) 
+```
+
+### 线程池运行原理
+
+<img src="examination.assets/image-20210726000043985.png" alt="image-20210726000043985" style="zoom:50%;" />
+
+###  四种拒绝策略
+
+```
+*
+* 第一种拒绝策略是 AbortPolicy，这种拒绝策略在拒绝任务时，会直接抛出一个类型为 RejectedExecutionException 的 RuntimeException，让你感知到任务被拒绝了，于是你便可以根据业务逻辑选择重试或者放弃提交等策略。
+*
+* 第二种拒绝策略是 DiscardPolicy，这种拒绝策略正如它的名字所描述的一样，当新任务被提交后直接被丢弃掉，也不会给你任何的通知，相对而言存在一定的风险，因为我们提交的时候根本不知道这个任务会被丢弃，可能造成数据丢失。
+*
+* 第三种拒绝策略是 DiscardOldestPolicy，如果线程池没被关闭且没有能力执行，则会丢弃任务队列中的头结点，通常是存活时间最长的任务，这种策略与第二种不同之处在于它丢弃的不是最新提交的，而是队列中存活时间最长的，这样就可以腾出空间给新提交的任务，但同理它也存在一定的数据丢失风险。
+*
+* 第四种拒绝策略是 CallerRunsPolicy，相对而言它就比较完善了，当有新任务提交后，如果线程池没被关闭且没有能力执行，则把这个任务交于提交任务的线程执行，也就是谁提交任务，谁就负责执行任务。这样做主要有两点好处。
+*
+* 第一点新提交的任务不会被丢弃，这样也就不会造成业务损失。
+* 第二点好处是，由于谁提交任务谁就要负责执行任务，这样提交任务的线程就得负责执行任务，而执行任务又是比较耗时的，在这段期间，提交任务的线程被占用，也就不会再提交新的任务，减缓了任务提交的速度，相当于是一个负反馈。在此期间，线程池中的线程也可以充分利用这段时间来执行掉一部分任务，腾出一定的空间，相当于是给了线程池一定的缓冲期。
+```
+
+### 如何合理配置线程池，该怎么考虑
+
+1、CPU密集型：该任务需要大量运算，而且没有阻塞，CPU一直在全速运行（例如一个for循环无限跑）
+
+CPU密集型任务只有在真正的多核CPU上才能得到加速（通过多线程），如果是单核CPU上，无论你开几个模拟的多线程，该任务都不能得到加速，因为CPU总的运算能力就那么多。
+尽可能少的线程数量：一般公式：CPU核数+1个线程 的线程池，即8核CPU，可以设置9个线程
+
+2、IO密集型：不是一直在执行任务，例如（不停的去数据库、redis拿数据，存数据）
+
+方案一：应配置尽可能多的线程，如CPU核数*2
+
+方案二：CPU核数/1-阻塞系数   阻塞系数在0.8-0.9之间，比如8核CPU：8/(1-0.9)=80个线程数
 
 
 
+## 2、死锁编码及定位
+
+### （1）死锁解释
+
+两个或两个以上的进程在执行任务的过程中，因争抢资源而造成的一种互相等待的现象，若无外力干涉将无法推进下去。
+
+### (2) 死锁代码
+
+```java
+public class HoldLockThread implements Runnable {
+
+    private String lockA;
+    private String lockB;
+
+    public HoldLockThread(String lockA, String lockB) {
+        this.lockA = lockA;
+        this.lockB = lockB;
+    }
+
+    // A线程进来获得锁A，（等2s）然后B线程进来获得锁B，然后A想去获得锁B（此时B还持有锁B）
+    @Override
+    public void run() {
+        synchronized (lock1) {
+            System.out.println(Thread.currentThread().getName() + "\t自己持有lock1：" + lock1 + "，尝试获得lock2：" + lock2);
+            try {
+                // 等待两秒，让第二B线程启动并获取锁B
+                TimeUnit.SECONDS.sleep(2);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            synchronized (lock2) {
+                System.out.println(Thread.currentThread().getName() + "\t自己持有lock2：" + lock2 + "，尝试获得lock1：" + lock1);
+            }
+        }
+    }
+}
+```
+
+```java
+public class DeadLockDemo {
+    public static void main(String[] args) {
+        String lockA = "lockA";
+        String lockB = "lockB";
+        new Thread(new HoldLockThread(lockA,lockB),"ThreadAAA").start();
+        new Thread(new HoldLockThread(lockB,lockA),"ThreadBBB").start();
+    }
+}
+```
+
+首先通过jps命令定位进程号，通过jstack分析问题
+
+```
+superking@wangchaodeMacBook-Pro examination % jps -l
+20104 org.jetbrains.jps.cmdline.Launcher
+1384 
+20105 com.supkingx.base.f_thread.deadlock.DeadLockDemo
+20123 jdk.jcmd/sun.tools.jps.Jps
+18732 org.jetbrains.jps.cmdline.Launcher
+
+superking@wangchaodeMacBook-Pro examination % jstack 20105
+2021-07-26 21:32:13
+Full thread dump Java HotSpot(TM) 64-Bit Server VM (25.251-b08 mixed mode):
+
+"Attach Listener" #14 daemon prio=9 os_prio=31 tid=0x00007fd0b8009000 nid=0x5c03 waiting on condition [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"DestroyJavaVM" #13 prio=5 os_prio=31 tid=0x00007fd0b6898000 nid=0xf03 waiting on condition [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+。。。。。。。。。。。。。。
+。。。。。。。。。。。。。。
+Found one Java-level deadlock:
+=============================
+"ThreadBBB":
+  waiting to lock monitor 0x00007fd0b7011c18 (object 0x000000076ac1dee0, a java.lang.String),
+  which is held by "ThreadAAA"
+"ThreadAAA":
+  waiting to lock monitor 0x00007fd0b7014298 (object 0x000000076ac1df18, a java.lang.String),
+  which is held by "ThreadBBB"
+
+Java stack information for the threads listed above:
+===================================================
+"ThreadBBB":
+        at com.supkingx.base.f_thread.deadlock.HoldLockThread.run(HoldLockThread.java:30)
+        - waiting to lock <0x000000076ac1dee0> (a java.lang.String)
+        - locked <0x000000076ac1df18> (a java.lang.String)
+        at java.lang.Thread.run(Thread.java:748)
+"ThreadAAA":
+        at com.supkingx.base.f_thread.deadlock.HoldLockThread.run(HoldLockThread.java:30)
+        - waiting to lock <0x000000076ac1df18> (a java.lang.String)
+        - locked <0x000000076ac1dee0> (a java.lang.String)
+        at java.lang.Thread.run(Thread.java:748)
+
+Found 1 deadlock.
+```
+
+分析：
+
+<img src="examination.assets/image-20210726213604015.png" alt="image-20210726213604015" style="zoom:33%;" />
+
+
+
+# 二十四、jdk的bin包下的小功能
+
+JPS：可以看本机中java的后台运行程序
+jstack：见上面
 
