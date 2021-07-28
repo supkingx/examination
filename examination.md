@@ -743,7 +743,15 @@ public class StaticProxyTest {
  1、如何根据加载到内存中的被代理类，动态创建一个代理类及其对象
  2、当通过代理类的对象调用方法时，如何动态的去调用被代理类中的同名方法。
 
-### (1)接口
+动态代理常用的两种方式
+
+1、java自带的代理方式
+
+2、Cglib
+
+### javaProxy
+
+#### (1)接口
 
 ```java
 public interface Human {
@@ -754,7 +762,7 @@ public interface Human {
 }
 ```
 
-### (2)动态代理工厂
+#### (2)动态代理工厂
 
 ```java
 public class MyInvocationHandler implements InvocationHandler {
@@ -796,7 +804,7 @@ public class ProxyFactory {
 }
 ```
 
-### (3)被代理对象
+#### (3)被代理对象
 
 ```java
 public class Superman implements Human {
@@ -812,7 +820,7 @@ public class Superman implements Human {
 }
 ```
 
-### (4)动态代理的使用
+#### (4)动态代理的使用
 
 ```java
 /**
@@ -843,7 +851,57 @@ public class DynamicProxyTest {
 }
 ```
 
-### (5)、总结
+### Cglib
+
+> CGLIB是一个强大的、高性能的代码生成库。其被广泛应用于AOP框架（Spring、dynaop）中，用以提供方法拦截操作。Hibernate作为一个比较受欢迎的ORM框架，同样使用CGLIB来代理单端（多对一和一对一）关联（延迟提取集合使用的另一种机制）。CGLIB作为一个开源项目，其代码托管在github，地址为：https://github.com/cglib/cglib
+>
+> CGLIB代理主要通过对字节码的操作，为对象引入间接级别，以控制对象的访问。我们知道Java中有一个动态代理也是做这个事情的，那我们为什么不直接使用Java动态代理，而要使用CGLIB呢？答案是CGLIB相比于JDK动态代理更加强大，JDK动态代理虽然简单易用，但是其有一个致命缺陷是，只能对接口进行代理。如果要代理的类为一个普通类、没有接口，那么Java动态代理就没法使用了。
+>
+> CGLIB底层使用了**ASM**（一个短小精悍的字节码操作框架）来操作字节码生成新的类。除了CGLIB库外，脚本语言（如Groovy何BeanShell）也使用ASM生成字节码。ASM使用类似SAX的解析器来实现高性能。我们不鼓励直接使用ASM，因为它需要对Java字节码的格式足够的了解
+
+#### （1）创建Cglib代理工厂
+
+```java
+public class CreatureCglibFactory {
+
+    public static <T>T getInstanceCglib(T t) {
+        Enhancer enhancer = new Enhancer();
+        enhancer.setSuperclass(t.getClass());
+        enhancer.setCallback(new MethodInterceptor() {
+            @Override
+            public Object intercept(Object obj, Method method, Object[] objects, MethodProxy methodProxy) throws Throwable {
+                System.out.println("Hi creature,come on!");
+                Object invoke = methodProxy.invoke(t, objects);
+                System.out.println("Oh,shit!");
+                return invoke;
+            }
+        });
+        return (T)enhancer.create();
+    }
+}
+```
+
+#### （2）测试
+
+```java
+public class CreatureCglibFactoryTest {
+    public static void main(String[] args) {
+        Dog dog = CreatureCglibFactory.getInstanceCglib(new Dog());
+        dog.eat();
+    }
+}
+
+输出:
+Hi creature,come on!
+哈哈哈哈，真好吃
+Oh,shit!
+```
+
+
+
+### 总结
+
+#### javaproxy
 
 1、如何根据加载到内存中的被代理类，动态创建一个代理类及其对象
 
@@ -884,6 +942,16 @@ public class MyInvocationHandler implements InvocationHandler {
     }
 }
 ```
+
+#### cglib
+
+我们通过一个Enhancer和一个MethodInterceptor来实现对方法的拦截。
+
+#### 两者区别
+
+1、java自带的proxy只能对接口进行代理，而cglib可以对所有类进行代理。
+
+2、java动态代理使用java原生反射API（java.lang.reflect）进行操作，在生成类上比较搞笑；CGLIB使用ASM框架直接对字节码进行操作，在类的执行过程中比较高效。
 
 
 
@@ -1313,21 +1381,29 @@ override
 - 哪些方法不可以被重写
   - final方法
   - 静态方法
-  - pricate等子类中不可见的方法
+  - private等子类中不可见的方法
 - 对象的多态
   - 子类如果重写的父类的方法，那么通过子类调用的一定是子类重写过的代码
   - 非静态方法默认的调用对象是this
   - this对象在构造器或者说<init>方法中就是正在创建的对象
 
-## 进阶要求：
+## 其他：
 
 - Override和overload的区别
-- Override重写的要求？
-  - 方法名
-  - 形参列表
-  - 返回值类型
-  - 抛出异常列表
-  - 修饰符
+  - Override重写的要求？
+    - 方法名 ：相同
+    - 形参列表：相同
+    - 返回值类型：相同
+    - 抛出异常列表：相同
+    - 修饰符：可以子类可以扩大访问权限
+  - overload的要球
+    - 方法名：相同
+    - 形参列表：必须不同
+    - 返回值类型：可以不同
+    - 抛出异常列表：可以不同
+    - 修饰符：可以不同
+  - 注意：
+    - 如果某一方法在父类中是访问权限是 private，那么就不能在子类对其进行重载；如果定义的话，也只是定义了一个新方法，而不会达到重载的效果
 - 了解《JVM虚拟机规范》中关于<clinit>和<init>方法的说明，invokespecial指令。
 
 

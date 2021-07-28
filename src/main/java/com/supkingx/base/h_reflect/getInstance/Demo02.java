@@ -16,7 +16,6 @@ public class Demo02 {
         // 在javabean中要求提供一个public的空参构造器，原因：
         // 便于反射创建运行时类的对象
         // 便于子类继承此运行时类，默认调用super()时，保证父类有次构造器
-
         Person person = personClass.newInstance();
         System.out.println(person);
     }

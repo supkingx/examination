@@ -1,9 +1,9 @@
-package com.supkingx.base.i_proxy.dynamicproxy;
+package com.supkingx.base.i_proxy.dynamicproxy.javaproxy;
 
 import java.lang.reflect.Proxy;
 
 /**
- * @description:
+ * @description: 使用java自带的代理功能
  * @Author: wangchao
  * @Date: 2021/7/18
  */
