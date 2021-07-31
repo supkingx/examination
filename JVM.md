@@ -803,3 +803,145 @@ Caused by: java.lang.OutOfMemoryError: Metaspace
 	... 14 more
 ```
 
+# 五、垃圾收集器
+
+> 垃圾回收器有哪些？回收的方式有哪些？
+>
+> GC四大算法是内存回收的方法论，垃圾收集器就是算法落地实现
+>
+> 目前还没有完美的垃圾收集器，只有针对具体应用最合适的收集器。
+
+1、垃圾回收的方式：serialOldGc（已废弃）、serial（串行）、parallel（并行）、cms（concMarkSweepGC）（并发）、ParNewGC、ParallelOldGC、G1
+
+2、如何查看服务器的垃圾收集器？
+
+命令：java -XX:+PrintCommandLineFlags -version
+
+```shell
+// 查看使用了那种GC收集器
+superking@wangchaodeMacBook-Pro examination % java -XX:+PrintCommandLineFlags -version
+-XX:G1ConcRefinementThreads=10 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:MaxHeapSize=4294967296 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC 
+
+// 查看是否使用某种收集器
+superking@wangchaodeMacBook-Pro examination % jinfo -flag UseSerialGC 3149
+-XX:-UseSerialGC
+```
+
+3、生产上如何配置垃圾收集器？
+
+
+
+4、谈谈你对垃圾收集器的理解？
+
+<img src="JVM.assets/image-20210731222042494.png" alt="image-20210731222042494" style="zoom:50%;" />
+
+<img src="JVM.assets/image-20210731222244686.png" alt="image-20210731222244686" style="zoom:50%;" />
+
+上图的意思是：假如新生代用了Serial垃圾收集器，那么老年代就会使用serial old收集器。其他的线条类似。
+
+GC日志中约定的单词
+
+<img src="JVM.assets/image-20210731225322464.png" alt="image-20210731225322464" style="zoom:33%;" />
+
+
+
+## 1、串行垃圾回收器（Serial）
+
+它为单线程环境设计且只使用一个线程进行垃圾回收，会暂停所有用户线程。所以不适合服务器环境。对于限定单个CPU环境来说，没有现存交互的开销可以获得最高的单线程垃圾收集效率，因此Serial垃圾搜集器依然是java虚拟机运行在Client模式下默认的新生代垃圾收集器。
+
+对应参数：-XX:+UseSerialGC
+开启后，新生代用Serial，老年代用Serial Old ，即新生代老年代都会使用串行回收收集器，新生代使用复制算法，老年代使用标记-整理算法。
+
+<img src="JVM.assets/image-20210731235727692.png" alt="image-20210731235727692" style="zoom:33%;" />
+
+
+
+## 2、并行垃圾回收器（parallel）
+
+多个垃圾收集线程并行工作（其实就是Serila收集器的新生代并发多线程版本），此时用户线程是暂停的，适用于科学计算/大数据处理、首台处理等弱交互环境，parNew最常见的应用就是配合老年代的CMSGC工作
+
+- ParNew
+
+对应参数：-XX:UseParNewGC    
+开启后值影响新生代的收集，不影响老年代，开启上诉参数后，会使用：ParNew（Young区）+Serial Old的收集器组合使用，新生代使用复制算法，老年代采用标记-整理算法。
+
+备注：-XX:ParallelGCThreads 限制线程数量，默认开启和CPU数目相同的线程数
+
+- parallel Scavenge
+
+类似于ParNew，使用复制算法。俗称吞吐量优先收集器。
+
+<img src="JVM.assets/image-20210731225948029.png" alt="image-20210731225948029" style="zoom:50%;" />
+
+对应参数：-XX:+UseParallelGC 或-XX:+UseParallelOldGC
+这两个参数可相互激活即，配置了一个，另外一个也会自动配置，在新生代用了ParallelGC，老年代会自动切换到ParallelOldGC
+
+备注：-XX:ParallelGCThreads=N 限制线程数量，默认开启和CPU数目相同的线程数
+
+
+
+## 3、并发垃圾回收器 CMS（ConcMarkSweepGC）
+
+是一种以获取最短回收停顿时间为目标的收集器。用户线程和垃圾线程可以同时进行（不一定是并行，可能交替进行），不需要停顿用户线程，互联网公司多用它，适用于对响应时间有要求的场景。
+
+- 开启参数：-XX:+UseConcMarkSweepGC 
+  开启该参数后会自动将-XX:UseParNewGC打开，新生代用ParNew，老年代用CMS，Serial OLD作为CMS出错的后备收集器。老年代使用标记清除算法。
+
+该回收器分为四个步骤：
+
+1、初始标记（CMS inital mark）和用户线程不一起运行
+只是标记下GC Roots能直接关联的对象，速度很快，仍然需要暂停所有的工作线程。
+
+2、并发标记（CMS concurrent mark）和用户线程一起运行
+进行GC Roots跟踪过程，和用户线程一起，不需要暂停工作线程。主要标记过程，标记全部对象。
+
+3、重新标记（CMS remark）和用户线程不一起运行
+为了修正正在并发标记期间，因用户程序继续运行而导致标记产生变动的那一部分对象的标记记录，仍然需要暂停所有的工作线程。由于并发标记时，用户线程依然运行，因此在正式清理之前，再做修正。
+
+4、并发清除（CMS concurrent sweep）和用户线程一起运行
+清除GC Roots不可达对象，和用户线程一起工作，不需要暂停工作线程。基于标记结果，直接清理对象
+由于耗时最长的并发标记和并发清除过程中，垃圾收集线程可以和用户现在一起并发工作，所以总体上看CMS收集器的内存回收和用户线程是一起并发进行的。
+
+- 优点：并发收集，停顿低（用户线程停顿低）
+- 缺点：
+  - 并发执行，多CPU资源压力大
+    - CMS在收集时会和用户线程同时对堆内存进行占用，也就是说CMS必须在老年代堆用尽之前完成垃圾回收，否则CMS失败，出发担保机制，串行老年代收集器上场，以STW（什么是STW，看下文的备注）的方式进行一次GC，从而造成大量的时间浪费。
+  - 采用标记清除算法会导致大量的碎片
+    - 标记清除算法无法整理碎片空间，老年代空间会随着时长被耗尽，最后不得不通过担保机制对堆内存进行压缩，CMS也提供了参数-XX:CMSFullGCsBeForeCompaction（默认值是0，即每次都进行内存整理）指定多少次CMS后进行一次压缩的Full GC。
+
+备注：
+
+> Java中Stop-The-World机制简称STW，是在执行垃圾收集算法时，[Java](http://www.jb51.net/list/list_207_1.htm)应用程序的其他所有线程都被挂起（除了垃圾收集帮助器之外）。Java中一种全局暂停现象，全局停顿，所有Java代码停止，native代码可以执行，但不能与JVM交互；这些现象多半是由于gc引起
+
+以下就是使用了CMS后的效果
+
+<img src="JVM.assets/image-20210731235437974.png" alt="image-20210731235437974" style="zoom:50%;" />
+
+
+
+
+
+
+
+## 4、G1垃圾回收器
+
+G1垃圾回收器将堆内存分割成不同的区域然后并发的对其进行垃圾回收
+
+
+
+## 5、总结
+
+### 如何选择合适的垃圾收集器
+
+<img src="JVM.assets/image-20210801000123671.png" alt="image-20210801000123671" style="zoom:33%;" />
+
+<img src="JVM.assets/image-20210801001252700.png" alt="image-20210801001252700" style="zoom:50%;" />
+
+
+
+
+
+
+
+
+
