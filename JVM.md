@@ -319,11 +319,27 @@ java -help
 
 ​	young区到老年区，需要活过15次
 
-3、-XX:SurvivorRatio
+3、-XX:SurvivorRatio=8
 
-4、-XX:NewRatio
+​		设置新生代中Eden 和 S0/S1空间的比例，默认-XX:SurvivorRatio=8，Eden:S0:S1 = 8:1:1
+​	    假如：-XX:SurvivorRatio=4，那么Eden:S0:S1 = 4:1:1
+​		即：SurvivorRatio值就是设置Eden区比例占多少，S0/S1相同
+
+​		以下是-XX:SurvivorRatio=4的示例，很明显Eden的容量是from区和 to区的四倍
+
+<img src="JVM.assets/image-20210731102846458.png" alt="image-20210731102846458" style="zoom:33%;" />
 
 
+
+4、-XX:NewRatio=2
+
+​		设置新生代与老年代在 堆结构中的占比，默认-XX:NewRatio=2，年轻代占整个堆的1/3
+​		假如：-XX:NewRatio=4：新生代占1，老年代占4，年轻代占整个堆的1/5
+​		NewRatio就是设置老年代的占比，剩下的1给新生代
+
+​		下图就是-XX:NewRatio=4的示例
+
+​		<img src="JVM.assets/image-20210731104618180.png" alt="image-20210731104618180" style="zoom:33%;" />
 
 ### 经典参数
 
@@ -342,7 +358,8 @@ java -help
 ### 常用参数
 
 ```
--Xms128m -Xmx4096m -Xss1024k -XX:MetaspaceSize=512m -XX:+PrintCommandLineFlags -XX:+PrintGCDetails -XX:+UseSerialGC
+-Xms10m -Xmx10m -Xss1024k -XX:MetaspaceSize=512m -XX:+PrintCommandLineFlags -XX:+PrintGCDetails -XX:+UseSerialGC
+-Xms10m -Xmx10m -XX:+PrintGCDetails -XX:+UseSerialGC -XX:SurvivorRatio=8
 ```
 
 
@@ -369,4 +386,244 @@ java -XX:+PrintFlagsInitial +XX:MetaspaceSize=512m
 -XX:+PrintCommandLineFlags
 
 Java -XX:+PrintCommandLineFlags -version (参数+版本号)
+
+
+
+# 三、引用
+
+> 强、软、弱、虚引用分别是什么
+
+## 强引用
+
+当内存不足的时候，JVM开始垃圾回收，对于强引用的对象，就算出现了OOM也不会对该对象进行回收，死都不回收。强引用是我们最常见的普通对象引用，只要还有强引用指向一个对象，就能表明对象还活着，垃圾收集器不会碰这种对象。在JAVA中最常见的就是强引用，把一个对象赋值给另外一个引用变量，这个引用变量就是一个强引用。当一个对象被强引用变量引用时，它处于可达状态，它是不可能被GC的，即使该对象以后永远都不会被用到JVM，也不会回收。因此强引用时造成java内存泄漏（占用内存过大）的主要原因之一。
+
+对于一个普通的对象，如果没有其他的引用关系，只要超过了引用的作用域或者显示的将相应的强引用赋值为null，一般认为就是可以被GC的。（当然具体GC还要看JVM的策略）。
+
+```java
+public class StrongReferenceDemo {
+    public static void main(String[] args) {
+        Object o1 = new Object();
+        Object o2 = o1;
+        o1 = null;
+        System.gc();
+        // o2依然有值，即使o1变为null了，但是o2是强引用。
+        System.out.println(o2);
+    }
+}
+```
+
+## 软引用
+
+需要用java.lang.ref.SoftReference类来实现，内存足够的情况下，不收你，内存不够了，就收你。软引用一般用在对内存敏感的程序中，比如高速缓存就用到了软引用，内存够用就保留，内存不够就回收！（MyBatis里的缓存用到过软引用），当自己做缓存的时候，也可以使用软引用，
+
+1、代码示例，内存够用的场景，代码可见objectSoftReference不会被回收
+
+```java
+public class SoftReferenceDemo {
+    public static void main(String[] args) {
+        Object o1 = new Object();
+        SoftReference<Object> objectSoftReference = new SoftReference<>(o1);
+        System.out.println(o1);
+        System.out.println(objectSoftReference.get());
+
+        o1= null;
+        System.gc();
+        System.out.println(o1);
+        System.out.println(objectSoftReference.get());
+    }
+}
+
+输出
+  
+java.lang.Object@511d50c0
+java.lang.Object@511d50c0
+null
+java.lang.Object@511d50c0
+```
+
+2、代码示例，内存不用够用的场景，发现OOM后，objectSoftReference被回收了
+
+```java
+/**
+ * @description: 软引用（内存 不够用场景）
+ * 配置小内存 -Xms10m -Xmx10m
+ * 大对象new byte[30 * 1024 * 1024] 使其OOM
+ */
+public class SoftReferenceDemo2 {
+    public static void main(String[] args) {
+        Object o1 = new Object();
+        SoftReference<Object> objectSoftReference = new SoftReference<>(o1);
+        System.out.println(o1);
+        System.out.println(objectSoftReference.get());
+
+        o1= null;
+        try{
+            byte[] bytes = new byte[30 * 1024 * 1024];
+        }catch (Throwable e){
+            e.printStackTrace();
+        }finally {
+            System.out.println(o1);
+            // 内存不够用，会被回收
+            System.out.println(objectSoftReference.get());
+        }
+    }
+}
+
+输出
+java.lang.Object@71bc1ae4
+java.lang.Object@71bc1ae4
+java.lang.OutOfMemoryError: Java heap space
+	at com.supkingx.base.l_jvm.gc.SoftReferenceDemo2.main(SoftReferenceDemo2.java:21)
+null
+null
+```
+
+### 使用场景分析
+
+<img src="JVM.assets/image-20210731122339235.png" alt="image-20210731122339235" style="zoom:50%;" />
+
+
+
+## 弱引用
+
+需要使用java.lang.WeakReference类来实现，它比软引用的生存期更短，对于只有弱引用的对象来说，只要垃圾回收机制一运行，不管JVM的内存空间是否足够，都会回收对象占用的内存。
+
+代码如下，GC之后，objectSoftReference被回收
+
+```java
+public class WeakReferenceDemo {
+    public static void main(String[] args) {
+        Object o1 = new Object();
+        WeakReference<Object> objectSoftReference = new WeakReference<>(o1);
+        System.out.println(o1);
+        System.out.println(objectSoftReference.get());
+
+        o1 = null;
+        System.gc();
+        System.out.println(o1);
+        // 内存不够用，会被回收
+        System.out.println(objectSoftReference.get());
+    }
+}
+```
+
+### WeakHashMap
+
+HashMap和WeakHashMap的比较
+
+```java
+public class WeakHashMapDemo {
+    public static void main(String[] args) {
+        myHashMap();
+        System.out.println("=========================");
+        myWeakHashMap();
+    }
+
+    private static void myHashMap() {
+        HashMap<Integer, String> map = new HashMap<>();
+        Integer key = new Integer(2);
+        String value = "HashMap";
+        map.put(key, value);
+        System.out.println(map);
+
+        key = null;
+        System.out.println(map);
+
+        System.gc();
+        // 正常输出
+        System.out.println(map);
+    }
+    private static void myWeakHashMap() {
+        WeakHashMap<Integer, String> map = new WeakHashMap<>();
+        Integer key = new Integer(2);
+        String value = "WeakHashMap";
+        map.put(key, value);
+        System.out.println(map);
+
+        key = null;
+        System.out.println(map);
+
+        System.gc();
+        // 输出为空，一GC就回收
+        System.out.println(map);
+    }
+}
+```
+
+**注意，当WeakHashMap中，Integer key = 1时，则不会被回收。因为此时key是常量，存储在方法区，即metaspace**
+
+## 虚引用
+
+需要用到包java.lang.ref.PhantomReference。
+
+股顾名思义，虚引用就是形同虚设，与其他几种引用不同，虚引用并不会决定对象的生命周期。如果一个对象仅持有虚引用，那么它就和没有任何引用一样，在任何时候都可能被垃圾回收器回收，它不能单独使用也不能通过它访问对象，虚引用必须和引用队列（ReferenceQueue）联合使用。
+
+虚引用 的主要作用是跟踪对象被垃圾回收的状态。仅提供了一种确保对象被finalize以后，做某些事情的机制。PhantomReference的get方法总是返回null，因此无法访问对应的引用对象。其意义在于说明一个对象已经进入finalization阶段，可以被gc回收，用来实现比finalization机制更灵活的回收操作。
+
+换句话说，设置虚引用关联的唯一目的，就是在这个对象被GC的时候收到一个系统通知或者后续添加进一步的处理。
+java技术允许使用finalize()方法在垃圾收集器将对象从内存中清除出去之前做必要的清理工作。
+
+1、以下是虚引用的展示，GC将要开始的时候，对象会被放入虚引用队列：
+
+```java
+public class ReferenceQueueDemo {
+    public static void main(String[] args) throws InterruptedException {
+        Object o = new Object();
+        ReferenceQueue<Object> referenceQueue = new ReferenceQueue<>();
+        WeakReference<Object> weakReference = new WeakReference<>(o, referenceQueue);
+
+        System.out.println(o);
+        System.out.println(weakReference.get());
+        // 弱引用
+        System.out.println("gc之前的弱引用队列" + referenceQueue.poll());
+        o = null;
+        System.gc();
+        Thread.sleep(1000);
+        System.out.println("gc之后的对象" + o);
+        System.out.println("gc之后的虚引用" + weakReference.get());
+        System.out.println("gc之后的弱引用队列" + referenceQueue.poll());
+    }
+}
+
+输出：
+java.lang.Object@511d50c0
+java.lang.Object@511d50c0
+gc之前的弱引用队列null
+  
+gc之后的对象null
+gc之后的虚引用null
+gc之后的弱引用队列java.lang.ref.WeakReference@60e53b93
+```
+
+2、使用PhantomReference实现虚引用
+
+```java
+public class PhantomReferenceDemo {
+    public static void main(String[] args) {
+        Object o1 = new Object();
+        ReferenceQueue<Object> referenceQueue = new ReferenceQueue<>();
+        PhantomReference<Object> phantomReference = new PhantomReference<>(o1,referenceQueue);
+
+        System.out.println(o1);
+        System.out.println(phantomReference.get());
+        System.out.println(referenceQueue.poll());
+
+        System.out.println("==========GC之后=======================");
+        o1=null;
+        System.gc();
+        System.out.println(o1);
+        System.out.println(phantomReference.get());
+        System.out.println(referenceQueue.poll());
+    }
+}
+
+输出：
+java.lang.Object@511d50c0
+null
+null
+==========GC之后=======================
+null
+null
+java.lang.ref.PhantomReference@60e53b93
+```
 
