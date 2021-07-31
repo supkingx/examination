@@ -18,7 +18,7 @@
 >
 > 栈（stack）：虚拟机栈。用于存储局部变量表。局部变量表存放了编译期可以知道长度的各种基本数据类型（boolean、byte、short、char、int、float、long、double）、对象引用（reference类型，存储对象在堆内存的首地址）。方法执行完自动释放。
 >
-> 方法区（Method Area）用于存储已被虚拟机加载的类信息、常量、静态常量、即时编译器编译后的代码等数据。
+> 方法区 即 MetaSpace（Method Area）用于存储已被虚拟机加载的类信息、常量、静态常量、即时编译器编译后的代码等数据。
 
 例如Demo02 obj1 = new Demo02()，obj1在栈里面，new Demo02()在堆里面
 
@@ -634,4 +634,172 @@ java.lang.ref.PhantomReference@60e53b93
   - 本地方法栈中JNI（native方法）引用的对象
 
 <img src="JVM.assets/image-20210731154613539.png" alt="image-20210731154613539" style="zoom:50%;" />
+
+# 四、OOM的认识
+
+## 1、StackOverflowError
+
+栈溢出。代码如下，其他关于栈的介绍，可以参考jvm快速入门
+
+```java
+public class Test02 {
+    public static void main(String[] args) {
+        System.out.println("sssss");
+        fun1();
+        System.out.println("uuuuuu");
+
+    }
+    public static void fun1(){
+        fun1();
+    }
+}
+
+// Exception in thread "main" java.lang.StackOverflowError
+```
+
+以上代码递归调用自己，最终导致栈溢出，这是error级别错误，不是Exception
+
+## 2、OutOfMemoryError: Java heap space
+
+new一个大对象导致堆内存溢出
+
+```java
+public class Test01 {
+    public static void main(String[] args) throws InterruptedException {
+        byte[] bytes = new byte[10 * 1024 * 1024];
+    }
+}
+
+抛出异常
+  Exception in thread "main" java.lang.OutOfMemoryError: Java heap space
+    at Demo03.Test01.main(Test01.java:17)
+```
+
+## 3、OutOfMemoryError: GC overhead limit
+
+![image-20210731172628348](JVM.assets/image-20210731172628348.png)
+
+综上所述，用了98%的时间去GC却只回收了2%的堆内存，连续多次GC都只回收不到2%的内存的 极端情况下，会报错 GC overhead limit。
+
+代码示例如下，数次GC，但是每次GC回收的内存小于2%，就会报错
+
+```java
+/**
+ * @description: 模拟 java.lang.OutOfMemoryError: GC overhead limit exceeded
+ * -Xms10m -Xmx20m -XX:+PrintGCDetails -XX:MaxDirectMemorySize=5m
+ * MaxDirectMemorySize：直接内存大小，因为本机内存太大，所以设置的小一点
+ *
+ * @Author: wangchao
+ * @Date: 2021/7/31
+ */
+public class GCOverheadDemo {
+    public static void main(String[] args) {
+        int i = 0;
+        ArrayList<Object> list = new ArrayList<>();
+        try {
+            while (true){
+                // TODO 记得关注 https://www.runoob.com/java/java-string-intern.html
+                list.add(String.valueOf(++i).intern());
+            }
+        }catch (Throwable e){
+            System.out.println("***************i:"+i);
+            e.printStackTrace();
+            throw e;
+        }
+    }
+}
+
+// 输出
+java.lang.OutOfMemoryError: GC overhead limit exceeded
+```
+
+## 3、OutOfMemoryError: Direct buffer memory
+
+```java
+//  -Xms10m -Xmx20m -XX:+PrintGCDetails -XX:MaxDirectMemorySize=5m
+public class DirectBufferMemoryDemo {
+    public static void main(String[] args) {
+       // 默认是本机的1/4 ，为了测试，我们将直接内存调小   -XX:MaxDirectMemorySize=5m
+        System.out.println("配置的maxDirectMemory:"+(VM.maxDirectMemory()/(double)1024/1024)+"MB");
+        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(6 * 1024 * 1024);
+    }
+}
+```
+
+异常原因如下
+
+<img src="JVM.assets/image-20210731175358572.png" alt="image-20210731175358572" style="zoom:50%;" />
+
+## 4、OutOfMemoryError: unable to create new native thread
+
+<img src="JVM.assets/image-20210731183502372.png" alt="image-20210731183502372" style="zoom: 50%;" />
+
+代码展示错误
+
+```java
+public class UnableCreateNewThreadDemo {
+    public static void main(String[] args) {
+        for (int i = 0; i < 10000; i++) {
+            new Thread(() -> {
+                System.out.println(Thread.currentThread().getName() + "start");
+                try {
+                    Thread.sleep(Integer.MAX_VALUE);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }, "" + i).start();
+        }
+    }
+}
+
+报错：
+Exception in thread "main" java.lang.OutOfMemoryError: unable to create new native thread
+	at java.lang.Thread.start0(Native Method)
+	at java.lang.Thread.start(Thread.java:717)
+	at com.supkingx.base.l_jvm.gc.oom.UnableCreateNewThreadDemo.main(UnableCreateNewThreadDemo.java:18)
+```
+
+## 5、OutOfMemoryError: Metaspace
+
+<img src="JVM.assets/image-20210731185045884.png" alt="image-20210731185045884" style="zoom:50%;" />
+
+代码默认报错如下，使用Enhancer创建数个代理类挤爆MetaSpace
+
+```java
+// -XX:MetaspaceSize=5m -XX:MaxMetaspaceSize=20m
+public class MetaspaceOOMDemo {
+    static class OOMTest {
+    }
+
+    public static void main(String[] args) {
+        int i = 0;
+
+        try {
+            while (true) {
+                i++;
+                Enhancer enhancer = new Enhancer();
+                enhancer.setSuperclass(OOMTest.class);
+                enhancer.setUseCache(false);
+                enhancer.setCallback(new MethodInterceptor() {
+                    @Override
+                    public Object intercept(Object o, Method method, Object[] objects, MethodProxy methodProxy) throws Throwable {
+                        return methodProxy.invokeSuper(o, objects);
+                    }
+                });
+                Object o = enhancer.create();
+                System.out.println("创建类:" + o);
+            }
+        } catch (Throwable e) {
+            System.out.println("多少次后发生了异常：" + i);
+            e.printStackTrace();
+        }
+    }
+}
+
+报错
+Caused by: java.lang.OutOfMemoryError: Metaspace
+	at java.lang.ClassLoader.defineClass1(Native Method)
+	at java.lang.ClassLoader.defineClass(ClassLoader.java:756)
+	... 14 more
+```
 
