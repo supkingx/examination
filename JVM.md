@@ -24,7 +24,7 @@
 
 
 
-## 1、GC是什么
+## 2、GC是什么
 
 GC主要发生在JVM体系结构图中的亮色部分（Method area、heap）
 
@@ -94,11 +94,7 @@ t3，符合第三条，常量引用的对象。
 
 
 
-
-
-
-
-## 2、GC 发生在JVM哪部分
+## 3、GC 发生在JVM哪部分
 
 > 发生在堆里，堆就是内存里面
 
@@ -108,7 +104,7 @@ t3，符合第三条，常量引用的对象。
 
 
 
-## 3、GC 4大算法
+## 4、GC 4大算法
 
 ### 1、引用计数法
 
@@ -161,11 +157,13 @@ JVM实现不采用这种方式了
 
 老年代常用这种方式回收对象
 
-## 4、老年代和新生代
+## 5、老年代和新生代
+
+参考文档：jvm快速入门.md
 
 
 
-## 5、如何查看本机的JVM
+## 6、如何查看本机的JVM
 
 ```shell
 # Jps：查看当前机器的java运行进程
@@ -186,13 +184,13 @@ superking@wangchaodeMacBook-Pro examination % jinfo  -flag MetaspaceSize 19212
 -XX:MetaspaceSize=21807104
 ```
 
-## 6、java7和java8的区别
+## 7、java7和java8的区别
 
 在java8中，永久代已经被删除，被一个叫元空间的区域所取代。元空间的本质和永久代类似。
 
 元空间（java8）与永久代（java7）之间最大的区别在于：永久代使用的JVM的堆内存，但是java8以后的元空间并不是在虚拟机中，**而是使用本机的物理内存**。因此，默认情况下，元空间的大小仅受本地内存限制。类的元数据放入native memory，字符串池和类的静态变量放入java堆中，这样可以加载多少类的元数据就不再由MaxPermSize控制，而是由系统的实际可用空间来控制
 
-## 9、GC/FullGC
+## 8、GC/FullGC
 
 利用参数 -XX:+PrintGCDetails 输出GC的详细信息
 
@@ -626,4 +624,14 @@ null
 null
 java.lang.ref.PhantomReference@60e53b93
 ```
+
+## 引用小总结
+
+- java中可以作为GC roots的对象（关于GC Root的介绍可以回顾上面 第一章->第二小节）
+  - 虚拟机栈（栈帧中的局部变量区，也叫做局部变量）
+  - 方法区中的类静态属性引用的对象
+  - 方法区中常量引用的对象
+  - 本地方法栈中JNI（native方法）引用的对象
+
+<img src="JVM.assets/image-20210731154613539.png" alt="image-20210731154613539" style="zoom:50%;" />
 
