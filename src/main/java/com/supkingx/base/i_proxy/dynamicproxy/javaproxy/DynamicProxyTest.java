@@ -1,5 +1,7 @@
-package com.supkingx.base.i_proxy.dynamicproxy;
+package com.supkingx.base.i_proxy.dynamicproxy.javaproxy;
 
+import com.supkingx.base.i_proxy.dynamicproxy.Human;
+import com.supkingx.base.i_proxy.dynamicproxy.Superman;
 import com.supkingx.base.i_proxy.staticproxy.ClothFactory;
 import com.supkingx.base.i_proxy.staticproxy.SupClothFactory;
 
