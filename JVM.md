@@ -18,7 +18,7 @@
 >
 > 栈（stack）：虚拟机栈。用于存储局部变量表。局部变量表存放了编译期可以知道长度的各种基本数据类型（boolean、byte、short、char、int、float、long、double）、对象引用（reference类型，存储对象在堆内存的首地址）。方法执行完自动释放。
 >
-> 方法区（Method Area）用于存储已被虚拟机加载的类信息、常量、静态常量、即时编译器编译后的代码等数据。
+> 方法区 即 MetaSpace（Method Area）用于存储已被虚拟机加载的类信息、常量、静态常量、即时编译器编译后的代码等数据。
 
 例如Demo02 obj1 = new Demo02()，obj1在栈里面，new Demo02()在堆里面
 
@@ -634,4 +634,364 @@ java.lang.ref.PhantomReference@60e53b93
   - 本地方法栈中JNI（native方法）引用的对象
 
 <img src="JVM.assets/image-20210731154613539.png" alt="image-20210731154613539" style="zoom:50%;" />
+
+# 四、OOM的认识
+
+## 1、StackOverflowError
+
+栈溢出。代码如下，其他关于栈的介绍，可以参考jvm快速入门
+
+```java
+public class Test02 {
+    public static void main(String[] args) {
+        System.out.println("sssss");
+        fun1();
+        System.out.println("uuuuuu");
+
+    }
+    public static void fun1(){
+        fun1();
+    }
+}
+
+// Exception in thread "main" java.lang.StackOverflowError
+```
+
+以上代码递归调用自己，最终导致栈溢出，这是error级别错误，不是Exception
+
+## 2、OutOfMemoryError: Java heap space
+
+new一个大对象导致堆内存溢出
+
+```java
+public class Test01 {
+    public static void main(String[] args) throws InterruptedException {
+        byte[] bytes = new byte[10 * 1024 * 1024];
+    }
+}
+
+抛出异常
+  Exception in thread "main" java.lang.OutOfMemoryError: Java heap space
+    at Demo03.Test01.main(Test01.java:17)
+```
+
+## 3、OutOfMemoryError: GC overhead limit
+
+![image-20210731172628348](JVM.assets/image-20210731172628348.png)
+
+综上所述，用了98%的时间去GC却只回收了2%的堆内存，连续多次GC都只回收不到2%的内存的 极端情况下，会报错 GC overhead limit。
+
+代码示例如下，数次GC，但是每次GC回收的内存小于2%，就会报错
+
+```java
+/**
+ * @description: 模拟 java.lang.OutOfMemoryError: GC overhead limit exceeded
+ * -Xms10m -Xmx20m -XX:+PrintGCDetails -XX:MaxDirectMemorySize=5m
+ * MaxDirectMemorySize：直接内存大小，因为本机内存太大，所以设置的小一点
+ *
+ * @Author: wangchao
+ * @Date: 2021/7/31
+ */
+public class GCOverheadDemo {
+    public static void main(String[] args) {
+        int i = 0;
+        ArrayList<Object> list = new ArrayList<>();
+        try {
+            while (true){
+                // TODO 记得关注 https://www.runoob.com/java/java-string-intern.html
+                list.add(String.valueOf(++i).intern());
+            }
+        }catch (Throwable e){
+            System.out.println("***************i:"+i);
+            e.printStackTrace();
+            throw e;
+        }
+    }
+}
+
+// 输出
+java.lang.OutOfMemoryError: GC overhead limit exceeded
+```
+
+## 3、OutOfMemoryError: Direct buffer memory
+
+```java
+//  -Xms10m -Xmx20m -XX:+PrintGCDetails -XX:MaxDirectMemorySize=5m
+public class DirectBufferMemoryDemo {
+    public static void main(String[] args) {
+       // 默认是本机的1/4 ，为了测试，我们将直接内存调小   -XX:MaxDirectMemorySize=5m
+        System.out.println("配置的maxDirectMemory:"+(VM.maxDirectMemory()/(double)1024/1024)+"MB");
+        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(6 * 1024 * 1024);
+    }
+}
+```
+
+异常原因如下
+
+<img src="JVM.assets/image-20210731175358572.png" alt="image-20210731175358572" style="zoom:50%;" />
+
+## 4、OutOfMemoryError: unable to create new native thread
+
+<img src="JVM.assets/image-20210731183502372.png" alt="image-20210731183502372" style="zoom: 50%;" />
+
+代码展示错误
+
+```java
+public class UnableCreateNewThreadDemo {
+    public static void main(String[] args) {
+        for (int i = 0; i < 10000; i++) {
+            new Thread(() -> {
+                System.out.println(Thread.currentThread().getName() + "start");
+                try {
+                    Thread.sleep(Integer.MAX_VALUE);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }, "" + i).start();
+        }
+    }
+}
+
+报错：
+Exception in thread "main" java.lang.OutOfMemoryError: unable to create new native thread
+	at java.lang.Thread.start0(Native Method)
+	at java.lang.Thread.start(Thread.java:717)
+	at com.supkingx.base.l_jvm.gc.oom.UnableCreateNewThreadDemo.main(UnableCreateNewThreadDemo.java:18)
+```
+
+## 5、OutOfMemoryError: Metaspace
+
+<img src="JVM.assets/image-20210731185045884.png" alt="image-20210731185045884" style="zoom:50%;" />
+
+代码默认报错如下，使用Enhancer创建数个代理类挤爆MetaSpace
+
+```java
+// -XX:MetaspaceSize=5m -XX:MaxMetaspaceSize=20m
+public class MetaspaceOOMDemo {
+    static class OOMTest {
+    }
+
+    public static void main(String[] args) {
+        int i = 0;
+
+        try {
+            while (true) {
+                i++;
+                Enhancer enhancer = new Enhancer();
+                enhancer.setSuperclass(OOMTest.class);
+                enhancer.setUseCache(false);
+                enhancer.setCallback(new MethodInterceptor() {
+                    @Override
+                    public Object intercept(Object o, Method method, Object[] objects, MethodProxy methodProxy) throws Throwable {
+                        return methodProxy.invokeSuper(o, objects);
+                    }
+                });
+                Object o = enhancer.create();
+                System.out.println("创建类:" + o);
+            }
+        } catch (Throwable e) {
+            System.out.println("多少次后发生了异常：" + i);
+            e.printStackTrace();
+        }
+    }
+}
+
+报错
+Caused by: java.lang.OutOfMemoryError: Metaspace
+	at java.lang.ClassLoader.defineClass1(Native Method)
+	at java.lang.ClassLoader.defineClass(ClassLoader.java:756)
+	... 14 more
+```
+
+# 五、垃圾收集器
+
+> 垃圾回收器有哪些？回收的方式有哪些？
+>
+> GC四大算法是内存回收的方法论，垃圾收集器就是算法落地实现
+>
+> 目前还没有完美的垃圾收集器，只有针对具体应用最合适的收集器。
+
+1、垃圾回收的方式：serialOldGc（已废弃）、serial（串行）、parallel（并行）、cms（concMarkSweepGC）（并发）、ParNewGC、ParallelOldGC、G1
+
+2、如何查看服务器的垃圾收集器？
+
+命令：java -XX:+PrintCommandLineFlags -version
+
+```shell
+// 查看使用了那种GC收集器
+superking@wangchaodeMacBook-Pro examination % java -XX:+PrintCommandLineFlags -version
+-XX:G1ConcRefinementThreads=10 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=268435456 -XX:MaxHeapSize=4294967296 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:+UseCompressedClassPointers -XX:+UseCompressedOops -XX:+UseG1GC 
+
+// 查看是否使用某种收集器
+superking@wangchaodeMacBook-Pro examination % jinfo -flag UseSerialGC 3149
+-XX:-UseSerialGC
+```
+
+3、生产上如何配置垃圾收集器？
+
+见下面几个收集器的介绍
+
+
+
+4、谈谈你对垃圾收集器的理解？
+
+<img src="JVM.assets/image-20210731222042494.png" alt="image-20210731222042494" style="zoom:50%;" />
+
+<img src="JVM.assets/image-20210731222244686.png" alt="image-20210731222244686" style="zoom:50%;" />
+
+上图的意思是：假如新生代用了Serial垃圾收集器，那么老年代就会使用serial old收集器。其他的线条类似。
+
+GC日志中约定的单词
+
+<img src="JVM.assets/image-20210731225322464.png" alt="image-20210731225322464" style="zoom:33%;" />
+
+
+
+## 1、串行垃圾回收器（Serial）
+
+它为单线程环境设计且只使用一个线程进行垃圾回收，会暂停所有用户线程。所以不适合服务器环境。对于限定单个CPU环境来说，没有现存交互的开销可以获得最高的单线程垃圾收集效率，因此Serial垃圾搜集器依然是java虚拟机运行在Client模式下默认的新生代垃圾收集器。
+
+对应参数：-XX:+UseSerialGC
+开启后，新生代用Serial，老年代用Serial Old ，即新生代老年代都会使用串行回收收集器，新生代使用复制算法，老年代使用标记-整理算法。
+
+<img src="JVM.assets/image-20210731235727692.png" alt="image-20210731235727692" style="zoom:33%;" />
+
+
+
+## 2、并行垃圾回收器（parallel）
+
+多个垃圾收集线程并行工作（其实就是Serila收集器的新生代并发多线程版本），此时用户线程是暂停的，适用于科学计算/大数据处理、首台处理等弱交互环境，parNew最常见的应用就是配合老年代的CMSGC工作
+
+- ParNew
+
+对应参数：-XX:UseParNewGC    
+开启后值影响新生代的收集，不影响老年代，开启上诉参数后，会使用：ParNew（Young区）+Serial Old的收集器组合使用，新生代使用复制算法，老年代采用标记-整理算法。
+
+备注：-XX:ParallelGCThreads 限制线程数量，默认开启和CPU数目相同的线程数
+
+- parallel Scavenge
+
+类似于ParNew，使用复制算法。俗称吞吐量优先收集器。
+
+<img src="JVM.assets/image-20210731225948029.png" alt="image-20210731225948029" style="zoom:50%;" />
+
+对应参数：-XX:+UseParallelGC 或-XX:+UseParallelOldGC
+这两个参数可相互激活即，配置了一个，另外一个也会自动配置，在新生代用了ParallelGC，老年代会自动切换到ParallelOldGC
+
+备注：-XX:ParallelGCThreads=N 限制线程数量，默认开启和CPU数目相同的线程数
+
+
+
+## 3、并发垃圾回收器 CMS（ConcMarkSweepGC）
+
+是一种以获取最短回收停顿时间为目标的收集器。用户线程和垃圾线程可以同时进行（不一定是并行，可能交替进行），不需要停顿用户线程，互联网公司多用它，适用于对响应时间有要求的场景。
+
+- 开启参数：-XX:+UseConcMarkSweepGC 
+  开启该参数后会自动将-XX:UseParNewGC打开，新生代用ParNew，老年代用CMS，Serial OLD作为CMS出错的后备收集器。老年代使用标记清除算法。
+
+该回收器分为四个步骤：
+
+1、初始标记（CMS inital mark）和用户线程不一起运行
+只是标记下GC Roots能直接关联的对象，速度很快，仍然需要暂停所有的工作线程。
+
+2、并发标记（CMS concurrent mark）和用户线程一起运行
+进行GC Roots跟踪过程，和用户线程一起，不需要暂停工作线程。主要标记过程，标记全部对象。
+
+3、重新标记（CMS remark）和用户线程不一起运行
+为了修正正在并发标记期间，因用户程序继续运行而导致标记产生变动的那一部分对象的标记记录，仍然需要暂停所有的工作线程。由于并发标记时，用户线程依然运行，因此在正式清理之前，再做修正。
+
+4、并发清除（CMS concurrent sweep）和用户线程一起运行
+清除GC Roots不可达对象，和用户线程一起工作，不需要暂停工作线程。基于标记结果，直接清理对象
+由于耗时最长的并发标记和并发清除过程中，垃圾收集线程可以和用户现在一起并发工作，所以总体上看CMS收集器的内存回收和用户线程是一起并发进行的。
+
+- 优点：并发收集，停顿低（用户线程停顿低）
+- 缺点：
+  - 并发执行，多CPU资源压力大
+    - CMS在收集时会和用户线程同时对堆内存进行占用，也就是说CMS必须在老年代堆用尽之前完成垃圾回收，否则CMS失败，出发担保机制，串行老年代收集器上场，以STW（什么是STW，看下文的备注）的方式进行一次GC，从而造成大量的时间浪费。
+  - 采用标记清除算法会导致大量的碎片
+    - 标记清除算法无法整理碎片空间，老年代空间会随着时长被耗尽，最后不得不通过担保机制对堆内存进行压缩，CMS也提供了参数-XX:CMSFullGCsBeForeCompaction（默认值是0，即每次都进行内存整理）指定多少次CMS后进行一次压缩的Full GC。
+
+备注：
+
+> Java中Stop-The-World机制简称STW，是在执行垃圾收集算法时，[Java](http://www.jb51.net/list/list_207_1.htm)应用程序的其他所有线程都被挂起（除了垃圾收集帮助器之外）。Java中一种全局暂停现象，全局停顿，所有Java代码停止，native代码可以执行，但不能与JVM交互；这些现象多半是由于gc引起
+
+以下就是使用了CMS后的效果
+
+<img src="JVM.assets/image-20210731235437974.png" alt="image-20210731235437974" style="zoom:50%;" />
+
+
+
+## 4、G1垃圾回收器
+
+G1垃圾回收器将堆内存分割成不同的区域然后并发的对其进行垃圾回收
+
+### G1是什么
+
+相较于其他垃圾收集器，最大的**特点**是：
+1、Eden，Survivor和Tenured等内存区域不再是连续的了，而是变成了一个个大小一样的region，每个region从1M到32M不等，一个region有可能属于Eden，Survivor，Tenured内存区域。
+
+2、G1有一个 整理内存的过程，不会产生太多的内存碎片
+
+3、G1的Stop The World（STW）更可控，G1在停顿时间上添加了预测机制，用户可以指定期望的停顿时间。
+
+<img src="JVM.assets/image-20210801085527114.png" alt="image-20210801085527114" style="zoom:33%;" />
+
+### G1底层原理
+
+- Region区域化的垃圾收集器
+  最大的好处是化整为零，避免全内存扫描，值需要按照区域来扫描即可。
+
+> 核心思想就是将整个堆内存区域划分成大小相同的子区域（Region），在JVM启动时会自动设置这些子区域的大小，在堆的使用上，G1并不要求对象存储一定是物理上连续的，只要逻辑上连续即可，每个分区也不会固定地为某个代服务，可以按需在年轻代和老年代之间切换。启动时间可以通过参数-XX:G1HeapRegionSize=n指定分区大小（1MB~32MB，必须是2的幂），默认将整个堆划分成2048个分区，即最大支持内存32MB*2048=65536MB=64G内存。
+
+1、区域的划分，左边是其他垃圾收集器，右边是G1
+
+<img src="JVM.assets/image-20210801100113348.png" alt="image-20210801100113348" style="zoom:33%;" />
+
+这些Region的一部分包含新生代，新生代的垃圾收集依然采用暂停所有应用线程的方式，将存活着的对象拷贝到老年代或Survivor空间。
+
+这些Region的一部分包含老年代，G1收集器通过将对象从一个区域拷贝到另外一个区域完成清理工作。这家就意味着，在正常的处理过程中，G1完成了堆的压缩（至少是部分压缩），这样也就不会有CMS内存碎片问题了
+
+在G1中有一个特殊的区域 Humongous，如果一个对象占用的空间超过了分区的50%以上，G1收集器就认为这是大对象，然后将其直接分到老年代，但是如果是一个短期存在的大对象，就会对收集器造成负面影响。为了解决这个问题，G1划分了一个Humongous区域，它专门用来存放巨型对象。如果一个H区装不下一个巨型对象，那么G1会寻找连续的H分区来存储，为了能找到连续的H区，有时候不得不启用Full GC。
+
+
+
+2、G1收集器下的Young GC (针对Eden的收集) 步骤
+
+(1).Eden耗尽后会触发GC，主要是小区域的收集+形成连续的内存块，避免内存碎片。
+(2).Eden区的数据移动到Survivor区，假如出现了Survivor空间不足，Eden区数据就会晋升到Old区。
+(3).Survivor区数据移动到新的Survivor区，部分数据会晋升到Old区
+(4).最后Ednen区收拾干净了，GC结束，用户的应用程序继续执行。
+
+3、回收的四步
+
+<img src="JVM.assets/image-20210801102318237.png" alt="image-20210801102318237" style="zoom:33%;" />
+
+### 开启G1收集器
+
+G1目前还是用的不多，大多数公司用CMS
+
+-XX:+UseG1GC 
+<img src="JVM.assets/image-20210801103157728.png" alt="image-20210801103157728" style="zoom:50%;" />
+
+## 5、总结
+
+### 如何选择合适的垃圾收集器
+
+<img src="JVM.assets/image-20210801000123671.png" alt="image-20210801000123671" style="zoom:33%;" />
+
+<img src="JVM.assets/image-20210801001252700.png" alt="image-20210801001252700" style="zoom:50%;" />
+
+<img src="JVM.assets/image-20210801085829987.png" alt="image-20210801085829987" style="zoom:33%;" />
+
+
+
+# 六、Springboot项目启动进行JVM参数调整
+
+java -server  -Xms1024m -Xmx1024m -XX:+PrintGCDetails -XX:+UseG1GC -jar xxxx.war
+
+jps -l 查看当前在运行的java程序的进行号
+
+jinfo  -flags 7900 查看当前Java程序的 jvm详情
+
+
 

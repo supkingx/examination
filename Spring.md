@@ -119,7 +119,7 @@ spring4和spring5的AOP顺序对比结果
 
 ## 5、循环依赖
 
-多个bea之间相互依赖，形成了一个闭环，构造器的循环依赖是无法解决的，spring的singleton支持框架自动解决循环依赖，而prototype不支持解决，
+多个bea之间相互依赖，形成了一个闭环，构造器的循环依赖是无法解决的，**spring的singleton支持框架自动解决循环依赖**，而prototype不支持解决，
 
 Spring内部是通过三级缓存来解决循环依赖的。（DefaultSingletonBeanFactory）
 
@@ -188,23 +188,39 @@ public class test{
 
 ### Spring源码分析
 
+#### Sping内部通过三级缓存来解决循环依赖
+
 org.springframework.beans.factory.support.DefaultSingletonBeanRegistry
 
-所谓的三级缓存
+1、所谓的三级缓存如下。
 
 ```java
 /** Cache of singleton objects: bean name to bean instance. */
 // 一级
-// 单例池：存放了已经经历了完整生命周期的bean对象
+// 单例池：存放了已经经历了完整生命周期的bean对象，即已经初始化好的bean，也就是所谓的单例池
 private final Map<String, Object> singletonObjects = new ConcurrentHashMap<>(256);
 
 /** Cache of singleton factories: bean name to ObjectFactory. */
-// 三级 存放可以生成Bean的工厂
+// 三级 存放可以生成Bean的工厂，存放FactoryBean。假如A类实现了FactoryBean，那么依赖注入的时候不是A类，而是A类产生的Bean
 private final Map<String, ObjectFactory<?>> singletonFactories = new HashMap<>(16);
 
 /** Cache of early singleton objects: bean name to bean instance. */
 // 二级
-// 存放早期暴露出来的bean对象，Bean的生命周期未结束（属性还没有填充完整）
+// 存放早期暴露出来的bean对象，Bean的生命周期未结束（属性还没有填充完整），即存放的是实例化了，但是未初始化的bean
 private final Map<String, Object> earlySingletonObjects = new HashMap<>(16);
 ```
+
+只有单例的bean才会通过三级缓存提前暴露来解决循环依赖的问题，而非单例的bean，每次从容器中获取都是一个新的对象，都会重新创建，所以非单例的bean没有缓存，不会放到以上三个缓存中去。
+
+上述三个缓存有四个重要的方法，getSingleton、doCreateBean、populateBean、addSingleton
+
+> 彩蛋：实例化：就是new一个空间，即申请一块内存空间。初始化：完成属性的各种复制。
+
+
+
+2、A/B利用三级缓存解决循环依赖的理论依据
+
+- A创建过程中需要B，于是A将自己放到三级缓存里面，然后去实例化B
+- B实例化过程中发现自己需要A，于是B先查一级缓存，然后二级，三级，直到找到A，最后把三级缓存里面的A放到二级缓存里面去实例化，并删除三级缓存里面的A
+- B顺利初始化之后，将自己放到一级缓存里面（此时B里面的A依然是创建中状态），然后回来接着创建A，此时B已经创建结束，直接从一级缓存里面拿到B，然后A创建完成，并将A自己放到一级缓存里面。
 
