@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class SemaphoreDemo {
     public static void main(String[] args) {
+        // 上限3个，到了3后会阻塞，等待信号量-1
         Semaphore semaphore = new Semaphore(3);
         for (int i = 0; i < 6; i++) {
             new Thread(() -> {
@@ -17,7 +18,7 @@ public class SemaphoreDemo {
                     // 加1
                     semaphore.acquire();
                     System.out.println(Thread.currentThread().getName()+"\t抢车位");
-                    TimeUnit.SECONDS.sleep(3);
+                    TimeUnit.SECONDS.sleep(6);
                     System.out.println(Thread.currentThread().getName()+"\t停车3秒后离开车位");
                 } catch (InterruptedException e) {
                     e.printStackTrace();

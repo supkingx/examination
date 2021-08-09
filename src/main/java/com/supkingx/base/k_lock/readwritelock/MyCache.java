@@ -33,11 +33,11 @@ public class MyCache {
         try {
             System.out.println(Thread.currentThread().getName() + " 正在写入:" + "key:" + key + ",value:" + value);
             // 暂定一会模拟网络延迟
-            try {
-                TimeUnit.MILLISECONDS.sleep(300);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+//            try {
+//                TimeUnit.MILLISECONDS.sleep(3000);
+//            } catch (InterruptedException e) {
+//                e.printStackTrace();
+//            }
             map.put(key, value);
             System.out.println(Thread.currentThread().getName() + " 写入完成:" + "key:" + key + ",value:" + value);
         } catch (Exception e) {
@@ -52,11 +52,11 @@ public class MyCache {
         try {
             System.out.println(Thread.currentThread().getName() + " 正在读取:" + "key:" + key);
             // 暂定一会模拟网络延迟
-            try {
-                TimeUnit.MILLISECONDS.sleep(300);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+//            try {
+//                TimeUnit.MILLISECONDS.sleep(300);
+//            } catch (InterruptedException e) {
+//                e.printStackTrace();
+//            }
             Object result = map.get(key);
             System.out.println(Thread.currentThread().getName() + " 读取完成:" + "key:" + key + ",result:" + result);
         } catch (Exception e) {

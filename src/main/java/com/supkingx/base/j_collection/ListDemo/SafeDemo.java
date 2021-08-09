@@ -15,6 +15,7 @@ public class SafeDemo {
         for (int i = 0; i <= 30; i++) {
             new Thread(()->{
                list.add(UUID.randomUUID().toString().substring(0,9));
+//                list.get()
                 System.out.println(list);
             }).start();
         }
