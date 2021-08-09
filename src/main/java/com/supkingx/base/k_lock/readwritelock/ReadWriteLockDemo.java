@@ -17,18 +17,18 @@ package com.supkingx.base.k_lock.readwritelock;
 public class ReadWriteLockDemo {
 
     public static void main(String[] args) {
-//        MyCache myCache = new MyCache();
-        MyCacheNoLock myCache = new MyCacheNoLock();
-
+        MyCache myCache = new MyCache();
+//        MyCacheNoLock myCache = new MyCacheNoLock();
         for (int i = 0; i < 5; i++) {
             final int i1 = i;
             new Thread(() -> {
                 myCache.put(i1 + "", i1 + "");
             }, String.valueOf(i)).start();
-        }
 
-        for (int i = 0; i < 5; i++) {
-            final int i1 = i;
+            new Thread(() -> {
+                myCache.get(i1 + "");
+            }, String.valueOf(i)).start();
+
             new Thread(() -> {
                 myCache.get(i1 + "");
             }, String.valueOf(i)).start();

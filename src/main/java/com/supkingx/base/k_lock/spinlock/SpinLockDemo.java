@@ -21,6 +21,7 @@ public class SpinLockDemo {
         while (!atomicReference.compareAndSet(null, thread)) {
 
         }
+        System.out.println(thread.getName() + "--myLock,get");
     }
 
     /**

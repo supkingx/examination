@@ -1,957 +1,8 @@
-# 一、java基础
+# 
 
-## 1、考虑输出结果
+一、java基础
 
-视频资料：https://www.bilibili.com/video/BV1Eb411P7bP?t=46
-
-```java
-public class Demo01 {
-    public static void main(String[] args) {
-        int i = 1;
-        i = i++;    // i = 1
-        int j = i++;   // j=1
-        int k = i + ++i * i++; // k=2+3*3 = 11  i=4
-        System.out.println("i=" + i);
-        System.out.println("j=" + j);
-        System.out.println("k=" + k);
-    }
-}
-```
-
-结果
-
-```
-i=4
-j=1
-k=11
-```
-
-## 2、集合源码分析
-
-视频：https://www.bilibili.com/video/BV1Kb411W75N?p=259
-
-### 2.1 ArrayList
-
-> 线程不安全
-
-#### （1）初步小理解
-
-##### 默认大小是多少？？？
-
-1、查看源码可知默认大小是10，但是没找到初始化为10的代码？？？？？
-
-```java
-/**
-  * Constructs an empty list with an initial capacity of ten.
-  */
-public ArrayList() {
-  this.elementData = DEFAULTCAPACITY_EMPTY_ELEMENTDATA;
-}
-```
-
-2、查看新增方法，在calculateCapacity中可知默认的容量是10
-
-```java
-public boolean add(E e) {
-        ensureCapacityInternal(size + 1);  // Increments modCount!!
-        elementData[size++] = e;
-        return true;
-    }
-
-// 确定容量
-private void ensureCapacityInternal(int minCapacity) {
-        ensureExplicitCapacity(calculateCapacity(elementData, minCapacity));
-    }
-
-// 计算出容量，小于10，则返回10（可知默认的容量是10）
-private static final int DEFAULT_CAPACITY = 10;
-private static int calculateCapacity(Object[] elementData, int minCapacity) {
-        if (elementData == DEFAULTCAPACITY_EMPTY_ELEMENTDATA) {
-            return Math.max(DEFAULT_CAPACITY, minCapacity);
-        }
-        return minCapacity;
-    }
-```
-
-##### 为什么线程不安全
-
-add方法没有加synchronized
-
-##### 线程不安全示例
-
-```java
-public class NoSafeDemo {
-    public static void main(String[] args) {
-        List<String> list = new ArrayList<>();
-        for (int i = 0; i <= 30; i++) {
-            new Thread(()->{
-               list.add(UUID.randomUUID().toString().substring(0,9));
-                System.out.println(list);
-            }).start();
-        }
-        // 报错：java.util.ConcurrentModificationException 线程不安全常见的异常（并发修改异常）
-      	// 报错原因：并发争抢修改导致
-    }
-}
-```
-
-##### 变成线程安全
-
-1、使用方法Collections.synchronizedList()
-
-```java
-public class SafeDemo2 {
-    public static void main(String[] args) {
-        List<String> list = Collections.synchronizedList(new ArrayList<>());
-        for (int i = 0; i <= 30; i++) {
-            new Thread(()->{
-               list.add(UUID.randomUUID().toString().substring(0,9));
-                System.out.println(list);
-            }).start();
-        }
-    }
-}
-
-```
-
-这个方法会返回一个新的同步list，如下。
-
-```java
- public static <T> List<T> synchronizedList(List<T> list) {
-        return (list instanceof RandomAccess ?
-                new SynchronizedRandomAccessList<>(list) :
-                new SynchronizedList<>(list));
-    }
-```
-
-该方法的新建和查询有一个互斥锁**（mutex）**，每次只能要么查询要么新建
-
-```java
-public boolean add(E e) {
-            synchronized (mutex) {return c.add(e);}
-}
-
- public E get(int index) {
-            synchronized (mutex) {return list.get(index);}
- }
-```
-
-
-
-2、使用java.util.concurrent包中的CopyOnWriteArrayList，写时复制
-
-```java
-public class SafeDemo3 {
-    public static void main(String[] args) {
-        List<String> list = new CopyOnWriteArrayList<>();
-        for (int i = 0; i <= 30; i++) {
-            new Thread(()->{
-               list.add(UUID.randomUUID().toString().substring(0,9));
-                System.out.println(list);
-            }).start();
-        }
-    }
-}
-```
-
-参考源码add()
-
-```java
-public boolean add(E e) {
-    final ReentrantLock lock = this.lock;
-    lock.lock();
-    try {
-        Object[] elements = getArray();
-        int len = elements.length;
-        Object[] newElements = Arrays.copyOf(elements, len + 1);
-        newElements[len] = e;
-        setArray(newElements);
-        return true;
-    } finally {
-        lock.unlock();
-    }
-}
-
-public E get(int index) {
-        return get(getArray(), index);
-}
-```
-
-CopyOnWrite容器即写时复制容器，往一个容器中添加元素的时候，不直接往当前容器Object[]添加，而是先将当前容器进行copy，复制出一个新容器 Object[] newElements，新容器容量比原容器大1，将新元素放入新容器的最后，最后将原容器的引用指向新容器setArray(newElements);
-这样做的好处是可以对CopyOnWrite容器进行并发读，而不需要加锁，因为当前容器不会添加任何元素，所以CopyOnWrite容器也是一种读写分离的思想，读和写时不同的容器。
-写的时候加锁，保证线程安全。
-
-P529
-
-
-
-
-
-### 2.2 LinkedList
-
-P530
-
-
-
-### 2.3 Vector
-
-P531
-
-add方法加了synchronized，线程安全
-
-```java
- public synchronized boolean add(E e) {
-        modCount++;
-        ensureCapacityHelper(elementCount + 1);
-        elementData[elementCount++] = e;
-        return true;
-    }
-```
-
-以下代码完美运行无报错
-
-```java
-public class SafeDemo {
-    public static void main(String[] args) {
-        List<String> list = new Vector<>();
-        for (int i = 0; i <= 30; i++) {
-            new Thread(()->{
-               list.add(UUID.randomUUID().toString().substring(0,9));
-                System.out.println(list);
-            }).start();
-        }
-    }
-}
-```
-
-
-
-### 2.4HashMap
-
-#### (1)初步小理解
-
-##### 非线程安全实例
-
-```java
-public class NoSafeDemo {
-    public static void main(String[] args) {
-        Map<Object, Object> map = new HashMap<>();
-        for (int i = 0; i <= 30; i++) {
-            new Thread(()->{
-                map.put(Thread.currentThread().getName(),UUID.randomUUID().toString().substring(0,9));
-                System.out.println(map);
-            }).start();
-        }
-        // 报错：java.util.ConcurrentModificationException 线程不安全常见的异常（并发修改异常）
-    }
-}
-```
-
-##### 解决线程安全
-
-1、使用ConcurrentHashMap（怎么实现的有空看下）
-
-```java
-public class SafeDemo {
-    public static void main(String[] args) {
-        Map<Object, Object> map = new ConcurrentHashMap<>();
-        for (int i = 0; i <= 30; i++) {
-            new Thread(()->{
-                map.put(Thread.currentThread().getName(),UUID.randomUUID().toString().substring(0,9));
-                System.out.println(map);
-            }).start();
-        }
-    }
-}
-```
-
-2、使用Collections.synchronizedMap
-
-```java
-public class SafeDemo2 {
-    public static void main(String[] args) {
-        Map<Object, Object> map = Collections.synchronizedMap(new HashMap<>());
-        for (int i = 0; i <= 30; i++) {
-            new Thread(()->{
-                map.put(Thread.currentThread().getName(),UUID.randomUUID().toString().substring(0,9));
-                System.out.println(map);
-            }).start();
-        }
-    }
-}
-```
-
-
-
-P550
-
-
-
-### 2.5 HashSet
-
-> 线程不安全
-
-#### （1）初步小理解
-
-##### 查看HashSet底层实现
-
-底层居然是HashMap<>();.........
-
-```java
-/**
- * Constructs a new, empty set; the backing <tt>HashMap</tt> instance has
- * default initial capacity (16) and load factor (0.75).
- */
-public HashSet() {
-    map = new HashMap<>();
-}
-```
-
-那为什么hashSet只能add一个元素，HashMap是put(k,v)呢？？？
-
-因为HashSet的add方法底层也是map的put，只是put的value是固定值PRESENT
-
-```java
-private static final Object PRESENT = new Object();
-public boolean add(E e) {
-        return map.put(e, PRESENT)==null;
-}
-```
-
-##### 线程不安全实例
-
-```java
-public class NoSafeDemo {
-    public static void main(String[] args) {
-        Set<String> set = new HashSet<>();
-        for (int i = 0; i <= 30; i++) {
-            new Thread(()->{
-                set.add(UUID.randomUUID().toString().substring(0,9));
-                System.out.println(set);
-            }).start();
-        }
-        // 报错：java.util.ConcurrentModificationException 线程不安全常见的异常（并发修改异常）
-    }
-}
-```
-
-##### 解决线程安全
-
-1、使用Collections.synchronizedSet()
-
-```java
-public class SafeDemo {
-    public static void main(String[] args) {
-        Set<String> set = Collections.synchronizedSet(new HashSet<>());
-        for (int i = 0; i <= 30; i++) {
-            new Thread(()->{
-                set.add(UUID.randomUUID().toString().substring(0,9));
-                System.out.println(set);
-            }).start();
-        }
-    }
-}
-```
-
-2、使用CopyOnWriteArraySet()
-
-```java
-public class SafeDemo2 {
-    public static void main(String[] args) {
-        Set<String> set = new CopyOnWriteArraySet<>();
-        for (int i = 0; i <= 30; i++) {
-            new Thread(()->{
-                set.add(UUID.randomUUID().toString().substring(0,9));
-                System.out.println(set);
-            }).start();
-        }
-    }
-}
-```
-
-CopyOnWriteArraySet的底层还是CopyOnWriteArrayList
-
-```java
-public CopyOnWriteArraySet() {
-    al = new CopyOnWriteArrayList<E>();
-}
-```
-
-
-
-
-
-
-
-
-
-## 3、反射
-
-### (1) 概述
-
-- 反射被视为动态语言的关键，反射机制允许程序在执行期间借助于Reflection API取得任何类的内部信息，并能直接操作任意对象的内部属性及方法。
-- 加载完类后，在堆内存的方法区中就会产生一个CLass类型的对象，这个对象就包含了类的结构信息。我们可以通过这个对象看到类的结构。这个对象就像一面镜子，透过这个镜子看到类的结构，所以，我们形象的称之为：反射。
-
-<img src="examination.assets/image-20210718134310333.png" alt="image-20210718134310333" style="zoom:33%;" />
-
-
-
-<img src="examination.assets/image-20210718134419464.png" alt="image-20210718134419464" style="zoom:33%;" />
-
-<img src="examination.assets/image-20210718134650913.png" alt="image-20210718134650913" style="zoom:33%;" />
-
-
-
-话不多说，上代码
-
-```java
-public class Person {
-    private int age;
-    private String name;
-
-    public Person(int age, String name) {
-        this.age = age;
-        this.name = name;
-    }
-
-    public int getAge() {
-        return age;
-    }
-
-    public void setAge(int age) {
-        this.age = age;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public void show(){
-        System.out.println("秀一下");
-    }
-
-    @Override
-    public String toString() {
-        return "Person{" +
-                "age=" + age +
-                ", name='" + name + '\'' +
-                '}';
-    }
-}
-```
-
-```java
-public class Demo01 {
-    public static void main(String[] args) throws Exception {
-        Class<Person> personClass = Person.class;
-        Constructor<Person> constructor = personClass.getConstructor(int.class,String.class);
-        // 创建了这个对象
-        Person king = constructor.newInstance( 12,"king");
-
-        System.out.println(king);
-        // 获取class中的这个字段
-        Field age = personClass.getDeclaredField("age");
-        // 无视private
-        age.setAccessible(true);
-        // 给king对象中的age字段设置参数
-        age.set(king,100);
-        System.out.println(king);
-        age.setAccessible(false);
-
-        // 获取class中的show方法
-        Method show = personClass.getDeclaredMethod("show");
-        // 执行king对象中的show方法
-        show.invoke(king);
-    }
-}
-```
-
-疑问：
-
-1、通过直接new的方式或反射的方式都可以直接调用公共的结构，开发中到底用哪个？
-
-> 建议直接用new的方式
-
-2、什么时候用到反射
-
-> 编译的时候不确定用哪个对象，反射特征：动态性，例如动态代理
-
-3、反射机制与面向对象中的封装性是不是矛盾的？如果看待两个技术？
-
-> 不矛盾。反射解决的问题是怎么调用，封装解决的问题是：哪些方法建议使用，哪些方法不建议使用
-
-
-
-### (2) 理解Class类并获取Class实例（掌握）
-
-1、类的加载过程
-
-程序经过javac命令后，会生成一个或多个字节码文件（.class），接着我们使用java命令来对某个字节码文件进行解释运行，相当于将某个字节码文件加载到内存中。此过程称之为加载。加载到内存中的类，我们称之为运行时类，此运行时类，就作为Class的一个实例。
-
-换句话说，Class的实例就对应着加载到内存中的一个运行时类
-
-
-
-2、获取CLass实例
-
-- 方式一：调用运行时类的属性：class
-
-```java
-Class<Person> personClass = Person.class;
-```
-
-- 方式二：通过运行时类的对象,调用getClass()
-
-```java
-Person person = new Person();
-Class aClass = person.getClass();
-```
-
-- 方式三：调用Class的静态方法，forName(String classPath)
-
-```java
-Class clazz = Class.forName("com.supkingx.base.h_reflect.Person");
-```
-
-- 方式四：使用类的加载器
-
-```java
-ClassLoader classLoader = Demo01.class.getClassLoader();
-Class aClass1 = classLoader.loadClass("com.supkingx.base.h_reflect.Person");
-```
-
-### (3) 类的加载与ClassLoader的理解（了解）
-
-<img src="examination.assets/image-20210718152022536.png" alt="image-20210718152022536" style="zoom:33%;" />
-
-<img src="examination.assets/image-20210718154642698.png" alt="image-20210718154642698" style="zoom:33%;" />
-
-<img src="examination.assets/image-20210718162450866.png" alt="image-20210718162450866" style="zoom:33%;" />
-
-```java
-// 方式四：使用类的加载器
-ClassLoader classLoader = Demo01.class.getClassLoader();
-Class aClass1 = classLoader.loadClass("com.supkingx.base.h_reflect.Person");
-```
-
-```java
-public class Test01 {
-    public static void main(String[] args) throws ClassNotFoundException {
-        // 获取系统类加载器
-        ClassLoader classLoader = Test01.class.getClassLoader();
-        Class aClass1 = classLoader.loadClass("com.supkingx.base.h_reflect.Person");
-        System.out.println(aClass1);
-        System.out.println(classLoader);
-        // 通过系统类加载器的getParent()，获取扩展类加载器
-        System.out.println(classLoader.getParent());
-        // 通过扩展类加载器的getParent()，获取引导类加载器
-        // 引导类加载器主要负责java的核心类库，无法加载自定义类
-        System.out.println(classLoader.getParent().getParent());
-    }
-}
-```
-
-读取配置文件
-
-```java
-public class Test02 {
-    public static void main(String[] args) throws IOException {
-        Properties properties = new Properties();
-        // 读取配置方式一
-//        FileInputStream fileInputStream = new FileInputStream("/Users/superking/Documents/project/examination/src/main/resources/jdbc.properties");
-       // 方式二：
-        InputStream resourceAsStream = Test02.class.getClassLoader().getResourceAsStream("jdbc.properties");
-        properties.load(resourceAsStream);
-        String user = (String) properties.get("user");
-        String password = (String) properties.get("password");
-        System.out.println("user:" + user + "," + "password:" + password);
-
-    }
-}
-```
-
-
-
-### (4) 创建运行时类的对象(掌握)
-
-```java
-public class Demo02 {
-    public static void main(String[] args) throws IllegalAccessException, InstantiationException {
-        Class<Person> personClass = Person.class;
-        // 调用此方法创建运行时类的对象（内部调用运行实时类的空参构造器）
-        // 想要用此方法创建，必须提供public权限的空参构造器
-
-        // 在javabean中要求提供一个public的空参构造器，原因：
-        // 便于反射创建运行时类的对象
-        // 便于子类继承此运行时类，默认调用super()时，保证父类有次构造器
-
-        Person person = personClass.newInstance();
-        System.out.println(person);
-    }
-}
-```
-
-以下创建运行时类的方式用的比较少
-
-```java
-Class<Person> personClass = Person.class;
-Constructor<Person> constructor = personClass.getConstructor(int.class,String.class);
-// 创建了这个对象
-Person king = constructor.newInstance( 12,"king");
-```
-
-
-
-### (5) 获取运行时类的完整结构（了解）
-
-参考代码：包package com.supkingx.base.h_reflect.Test 下的 Test01---Test06
-
-### (6) 调用运行时类的指定结构（掌握）
-
-```java
-public class FieldTest {
-    public static void main(String[] args) throws NoSuchFieldException, IllegalAccessException, InstantiationException {
-        Class<Person> personClass = Person.class;
-        Person person = personClass.newInstance();
-        Field nameField = personClass.getDeclaredField("name");
-        nameField.setAccessible(true);
-        nameField.set(person,"king");
-        System.out.println(person);
-
-        String name = (String)nameField.get(person);
-        System.out.println(name);
-    }
-}
-
-```
-
-```java
-public class MethodTest {
-    public static void main(String[] args) throws IllegalAccessException, InstantiationException, NoSuchFieldException, NoSuchMethodException, InvocationTargetException {
-        Class<Person> personClass = Person.class;
-        Person person = personClass.newInstance();
-
-        final Method show = personClass.getDeclaredMethod("show");
-        show.invoke(person);
-
-        // 第二个参数是返回类型
-        final Method display = personClass.getDeclaredMethod("display", String.class);
-        System.out.println(display.invoke(person, "哈哈哈"));
-
-    }
-}
-```
-
-```java
-public class ConstructorTest {
-    public static void main(String[] args) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException, InstantiationException {
-        Class<Person> personClass = Person.class;
-        Constructor<Person> declaredConstructor = personClass.getDeclaredConstructor(String.class);
-        declaredConstructor.setAccessible(true);
-        final Person person = declaredConstructor.newInstance("king");
-        System.out.println(person);
-    }
-}
-```
-
-
-
-
-
-### (7) 反射的应用用：动态代理
-
-见下一章
-
-### (8)总结：
-
-关注上面几个需要掌握的内容
-
-
-
-## 4、静态代理
-
-### (1)接口
-
-```java
-public interface ClothFactory {
-    void produceCloth();
-}
-```
-
-### (2)静态代理类
-
-```java
-public class ProxyClothFactory implements ClothFactory{
-
-    private ClothFactory clothFactory; // 就拿被代理对象进行实例化
-
-    public ProxyClothFactory(ClothFactory clothFactory) {
-        this.clothFactory = clothFactory;
-    }
-
-    @Override
-    public void produceCloth() {
-        System.out.println("代理工厂做一些准备工作");
-
-        clothFactory.produceCloth();
-
-        System.out.println("代理工厂做一些后续的收尾工作");
-    }
-}
-```
-
-### (3)被代理对象
-
-```java
-public class SupClothFactory implements ClothFactory{
-    @Override
-    public void produceCloth() {
-        System.out.println("sup生产衣服、。。。。。。。。");
-    }
-}
-```
-
-### (4)静态代理使用
-
-```java
-public class StaticProxyTest {
-    public static void main(String[] args) {
-        // 创建被代理对象
-        SupClothFactory supClothFactory = new SupClothFactory();
-        // 创建代理类对象
-        ProxyClothFactory proxyClothFactory = new ProxyClothFactory(supClothFactory);
-        proxyClothFactory.produceCloth();
-    }
-}
-```
-
-### (5)特点
-
-代理类和被代理类在编译期间就确定下来了
-
-
-
-## 5、动态代理
-
-> 使用一个代理将对象包装起来，然后用该代理对象取代原始对象。任何对原始对象的调用都要通过代理。代理对象决定是否以及何时将方法调用转到原方法。
-
-想要实现动态代理，需要解决的问题：
- 1、如何根据加载到内存中的被代理类，动态创建一个代理类及其对象
- 2、当通过代理类的对象调用方法时，如何动态的去调用被代理类中的同名方法。
-
-动态代理常用的两种方式
-
-1、java自带的代理方式
-
-2、Cglib
-
-### javaProxy
-
-#### (1)接口
-
-```java
-public interface Human {
-
-    String getBelief();
-
-    void eat(String food);
-}
-```
-
-#### (2)动态代理工厂
-
-```java
-public class MyInvocationHandler implements InvocationHandler {
-
-    private Object obj;// 需要使用被代理类的对象进行赋值
-
-    public void bind(Object o) {
-        this.obj = o;
-    }
-
-    // 当我们通过代理类的对象，调用方法A时，就会自动的调用如下方法：invoke(0
-    // 将被代理类要执行的方法a的功能，声明在invoke()中
-    @Override
-    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-
-        // 在原方法执行执行之前加入方法
-        System.out.println("method.invoke(obj, args)，执行之前");
-
-        // 代理类对象调用的方法，此方法也就作为了被代理类对象要调用的方法
-        // obj:被代理对象
-        Object invoke = method.invoke(obj, args);
-
-        // 在原方法执行执行之后加入方法
-        System.out.println("method.invoke(obj, args)，执行之后");
-
-        // 上诉方法的返回值就作为当前类中的invoke()的返回值
-        return invoke;
-    }
-}
-
-public class ProxyFactory {
-    // 调用此方法，放回一个被代理类对象，被代理类的对象
-    public static Object getProxyInstance(Object o) {
-        MyInvocationHandler handler = new MyInvocationHandler();
-        handler.bind(o);
-        // 被代理类的 类加载器、接口、
-        return Proxy.newProxyInstance(o.getClass().getClassLoader(), o.getClass().getInterfaces(), handler);
-    }
-}
-```
-
-#### (3)被代理对象
-
-```java
-public class Superman implements Human {
-    @Override
-    public String getBelief() {
-        return "I believe I can fly";
-    }
-
-    @Override
-    public void eat(String food) {
-        System.out.println("I like eating " + food);
-    }
-}
-```
-
-#### (4)动态代理的使用
-
-```java
-/**
- * @description: 动态代理
- * 想要实现动态代理，需要解决的问题：
- * 1、如何根据加载到内存中的被代理类，动态创建一个代理类及其对象
- * 2、当通过代理类的对象调用方法时，如何动态的去调用被代理类中的同名方法。
- * @Author: wangchao
- * @Date: 2021/7/18
- */
-public class DynamicProxyTest {
-    public static void main(String[] args) {
-        // 被代理类对象
-        Superman superman = new Superman();
-        // 注意：这里的human不是superman，因为我们是使用superman在这里是被代理类，
-        // 通过ProxyFactory.getProxyInstance(superman)生成了superman的代理对象
-        Human proxyInstance = (Human) ProxyFactory.getProxyInstance(superman);
-        System.out.println(proxyInstance.getBelief());
-        proxyInstance.eat("fish");
-
-        System.out.println("\n----------------------\n");
-
-        // 之前的静态代理，我们也可以通过动态代理来创建SupClothFactory的代理对象
-        SupClothFactory supClothFactory = new SupClothFactory();
-        ClothFactory clothFactory = (ClothFactory)ProxyFactory.getProxyInstance(supClothFactory);
-        clothFactory.produceCloth();
-    }
-}
-```
-
-### Cglib
-
-> CGLIB是一个强大的、高性能的代码生成库。其被广泛应用于AOP框架（Spring、dynaop）中，用以提供方法拦截操作。Hibernate作为一个比较受欢迎的ORM框架，同样使用CGLIB来代理单端（多对一和一对一）关联（延迟提取集合使用的另一种机制）。CGLIB作为一个开源项目，其代码托管在github，地址为：https://github.com/cglib/cglib
->
-> CGLIB代理主要通过对字节码的操作，为对象引入间接级别，以控制对象的访问。我们知道Java中有一个动态代理也是做这个事情的，那我们为什么不直接使用Java动态代理，而要使用CGLIB呢？答案是CGLIB相比于JDK动态代理更加强大，JDK动态代理虽然简单易用，但是其有一个致命缺陷是，只能对接口进行代理。如果要代理的类为一个普通类、没有接口，那么Java动态代理就没法使用了。
->
-> CGLIB底层使用了**ASM**（一个短小精悍的字节码操作框架）来操作字节码生成新的类。除了CGLIB库外，脚本语言（如Groovy何BeanShell）也使用ASM生成字节码。ASM使用类似SAX的解析器来实现高性能。我们不鼓励直接使用ASM，因为它需要对Java字节码的格式足够的了解
-
-#### （1）创建Cglib代理工厂
-
-```java
-public class CreatureCglibFactory {
-
-    public static <T>T getInstanceCglib(T t) {
-        Enhancer enhancer = new Enhancer();
-        enhancer.setSuperclass(t.getClass());
-        enhancer.setCallback(new MethodInterceptor() {
-            @Override
-            public Object intercept(Object obj, Method method, Object[] objects, MethodProxy methodProxy) throws Throwable {
-                System.out.println("Hi creature,come on!");
-                Object invoke = methodProxy.invoke(t, objects);
-                System.out.println("Oh,shit!");
-                return invoke;
-            }
-        });
-        return (T)enhancer.create();
-    }
-}
-```
-
-#### （2）测试
-
-```java
-public class CreatureCglibFactoryTest {
-    public static void main(String[] args) {
-        Dog dog = CreatureCglibFactory.getInstanceCglib(new Dog());
-        dog.eat();
-    }
-}
-
-输出:
-Hi creature,come on!
-哈哈哈哈，真好吃
-Oh,shit!
-```
-
-
-
-### 总结
-
-#### javaproxy
-
-1、如何根据加载到内存中的被代理类，动态创建一个代理类及其对象
-
-```java
-Proxy.newProxyInstance(o.getClass().getClassLoader(), o.getClass().getInterfaces(), handler);
-```
-
-2、当通过代理类的对象调用方法时，如何动态的去调用被代理类中的同名方法
-
-实现InvocationHandler方法，并使用method.invoke(obj,args);
-
-```java
-public class MyInvocationHandler implements InvocationHandler {
-
-    private Object obj;// 需要使用被代理类的对象进行赋值
-
-    public void bind(Object o) {
-        this.obj = o;
-    }
-
-    // 当我们通过代理类的对象，调用方法A时，就会自动的调用如下方法：invoke(0
-    // 将被代理类要执行的方法a的功能，声明在invoke()中
-    @Override
-    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-
-        // 在原方法执行执行之前加入方法
-        System.out.println("method.invoke(obj, args)，执行之前");
-
-        // 代理类对象调用的方法，此方法也就作为了被代理类对象要调用的方法
-        // obj:被代理对象
-        Object invoke = method.invoke(obj, args);
-
-        // 在原方法执行执行之后加入方法
-        System.out.println("method.invoke(obj, args)，执行之后");
-
-        // 上诉方法的返回值就作为当前类中的invoke()的返回值
-        return invoke;
-    }
-}
-```
-
-#### cglib
-
-我们通过一个Enhancer和一个MethodInterceptor来实现对方法的拦截。
-
-#### 两者区别
-
-1、java自带的proxy只能对接口进行代理，而cglib可以对所有类进行代理。
-
-2、java动态代理使用java原生反射API（java.lang.reflect）进行操作，在生成类上比较搞笑；CGLIB使用ASM框架直接对字节码进行操作，在类的执行过程中比较高效。
+参考 java基础.md
 
 
 
@@ -1721,7 +772,19 @@ public class Demo02 {
 
 # 八、SpringMVC
 
+
+
 ![image-20210712215743335](examination.assets/image-20210712215743335.png)
+
+<img src="examination.assets/image-20210809165006532.png" alt="image-20210809165006532" style="zoom:33%;" />
+
+SpringMVC的MVC是指什么？
+
+M（Model）V（View）C（Controller）
+
+<img src="examination.assets/image-20210809165334777.png" alt="image-20210809165334777" style="zoom:33%;" />
+
+
 
 # 九、redis
 
@@ -1749,9 +812,7 @@ public class Demo02 {
 
 # 十一、JVM
 
-## 
-
-看另外一个文件jvm.md
+## 看另外一个文件jvm.md
 
 
 
@@ -1953,6 +1014,28 @@ semaphore可以控制并发数，设置最多3线程抢车位，抢到车位信�
 ## 6、lock
 
 详细介绍看后面的阻塞队列之消费者模式
+
+
+
+## 7、BlockQueue
+
+```
+SynchronousQueue
+```
+
+见后面介绍
+
+## 8、CopyOnWriteArrayList
+
+
+
+## 9、ConcurrentHashMap
+
+
+
+## 10、CopyOnWriteArraySet
+
+
 
 
 
@@ -2213,7 +1296,7 @@ java代码时上面的顺序，但是在高并发情况下，顺序可以是 123
 
 ## 4、探究
 
-为什么volatile可是实现可见性和禁止指令重排
+为什么volatile可以实现可见性和禁止指令重排
 
 > 首先抛出一个概念：内存屏障（Memory Barrier）又称内存栅栏，是一个CPU指令，它的作用有两个：
 >
@@ -2321,7 +1404,7 @@ T1拿到了5，并改成了2019，想要写回主存，此时先将自己的期�
 
 > 思考i.getAndIncrement()，为什么没有加synchronized也能保证原子性
 
-> CAS并发原语体现在JAVA语言中就是sun.misc.Unsafe类中的各个方法。调用UnSafe类中的CAS方法，JVM会帮我们实现CAS汇编指令。这是一种完全依赖于硬件的功能，通过它实现了原子操作。再次强调，由于CAS是一种系统原语，原语属于操作系统用语范畴，是由若干条指令组成的，用于完成某个功能的一个过程，并且原语的执行必须是连续的，在执行过程中不允许被中断，也就是说CAS是一条CPU的原子指令，不糊造成所谓的数据不一致问题。
+> CAS并发原语体现在JAVA语言中就是sun.misc.Unsafe类中的各个方法。调用UnSafe类中的CAS方法，JVM会帮我们实现CAS汇编指令。这是一种完全依赖于硬件的功能，通过它实现了原子操作。再次强调，由于CAS是一种系统原语，原语属于操作系统用语范畴，是由若干条指令组成的，用于完成某个功能的一个过程，并且原语的执行必须是连续的，在执行过程中不允许被中断，也就是说CAS是一条CPU的原子指令，不会造成所谓的数据不一致问题。
 
 接下来以i.getAndIncrement为例进行讲解
 
@@ -2518,13 +1601,13 @@ cas：没有加锁，通过比较来确认是否修改数据，即提供 了一�
 
 3、CAS简单理解
 
-比较当前工作内存中的值和主内存中的值，如果相同则执行操作，否则继续比较知道主内存和工作内存中的值一致为止。
+比较当前工作内存中的值和主内存中的值，如果相同则执行操作，否则继续比较直到主内存和工作内存中的值一致为止。
 
 4、CAS应用
 
 CAS有三个操作数，内存值V，旧的预期值A，需要修改的更新值B。当且仅当预期值A和内存值V相同时，将内存值V修改为B，否则什么都不做。
 
-5、CAS的缺点
+5、CAS的缺点：见上面，只能保证一个共享变量的原子操作，循环消耗大，ABA问题
 
 6、CAS产生的ABA问题
 
@@ -2742,6 +1825,7 @@ public class SpinLockDemo {
         while (!atomicReference.compareAndSet(null, thread)) {
 
         }
+        System.out.println(thread.getName() + "--myLock,get");
     }
 		
   // 释放锁
@@ -2778,8 +1862,10 @@ public class SpinLockDemoTest {
 
 结果
 AA--myLock,come in
+AA--myLock,get
 BB--myLock,come in
 AA--myUnLock()
+BB--myLock,get
 BB--myUnLock()
 ```
 
@@ -2876,18 +1962,15 @@ public class MyCache {
 ```java
 public class ReadWriteLockDemo {
 
-    public static void main(String[] args) {
+     public static void main(String[] args) {
         MyCache myCache = new MyCache();
-
+//        MyCacheNoLock myCache = new MyCacheNoLock();
         for (int i = 0; i < 5; i++) {
             final int i1 = i;
             new Thread(() -> {
                 myCache.put(i1 + "", i1 + "");
             }, String.valueOf(i)).start();
-        }
 
-        for (int i = 0; i < 5; i++) {
-            final int i1 = i;
             new Thread(() -> {
                 myCache.get(i1 + "");
             }, String.valueOf(i)).start();
@@ -2901,27 +1984,27 @@ public class ReadWriteLockDemo {
 ```
 0 正在写入:key:0,value:0
 0 写入完成:key:0,value:0
+0 正在读取:key:0
+0 读取完成:key:0,result:0
 1 正在写入:key:1,value:1
 1 写入完成:key:1,value:1
+1 正在读取:key:1
+1 读取完成:key:1,result:1
 2 正在写入:key:2,value:2
 2 写入完成:key:2,value:2
+2 正在读取:key:2
+2 读取完成:key:2,result:2
 3 正在写入:key:3,value:3
 3 写入完成:key:3,value:3
+3 正在读取:key:3
+3 读取完成:key:3,result:3
 4 正在写入:key:4,value:4
 4 写入完成:key:4,value:4
-0 正在读取:key:0
-1 正在读取:key:1
-2 正在读取:key:2
-3 正在读取:key:3
 4 正在读取:key:4
-2 读取完成:key:2,result:2
-3 读取完成:key:3,result:3
-0 读取完成:key:0,result:0
 4 读取完成:key:4,result:4
-1 读取完成:key:1,result:1
 ```
 
-可以很明显的看到，先写后读的，这样可以保证每次读到的数据都是最新的。展现了读写锁的，读（独占），写（共享），读写（互斥）
+可以很明显的看到，先写后读的，这样可以保证每次读到的数据都是最新的。展现了读写锁的，读（共享），写（独占），读写（互斥）
 
 
 

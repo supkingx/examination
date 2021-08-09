@@ -90,6 +90,7 @@ person.getClass().getClassLoader().getParent() ，是拓展类加载器，因为
 只要是被关键字native修饰的，都是调用的与java无关的、底层的操作系统库、C语言函数库
 
 ```
+// Thread的start里面有个start0
 private native void start0();
 ```
 

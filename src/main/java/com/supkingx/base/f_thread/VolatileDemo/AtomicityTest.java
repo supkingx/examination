@@ -22,7 +22,7 @@ public class AtomicityTest {
 
         // 默认有两个线程，一个是main线程，一个是GC线程
         while (Thread.activeCount() > 2) {
-            // 使线程由执行态变成就绪态，让出cpu时间，在下一个线程执行的时候，此线程有可能被执行，也有可能不被执行
+            // 使main线程由执行态变成就绪态，让出cpu时间，在下一个线程执行的时候，此线程有可能被执行，也有可能不被执行
             Thread.yield();
         }
 

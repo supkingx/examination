@@ -7,44 +7,44 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 
 /**
- * @description: 1、队列
- * 2、阻塞队列
- * 2.1 阻塞队列有没有好的一面
+ * @description: 产生一个元素，消费一个元素。依次进行
  * @Author: wangchao
  * @Date: 2021/7/24
  */
 public class BlockingQueueDemo {
     public static void main(String[] args) throws InterruptedException {
 //        BlockingQueue<Object> blockingQueue = new ArrayBlockingQueue<>(1);
+        // SynchronousQueue 只存储单个元素,直到被消费，否则就会一直阻塞，等待被消费
         BlockingQueue<Object> blockingQueue = new SynchronousQueue<>();
-        new Thread(()->{
+        new Thread(() -> {
             try {
                 blockingQueue.put("1");
-                System.out.println(Thread.currentThread().getName()+"\t put 1");
+                // 只有当SynchronousQueue里的元素被使用了，才会走到下一步，否则会一直阻塞，等待被使用
+                System.out.println(Thread.currentThread().getName() + "\t put 1");
 
                 blockingQueue.put("2");
-                System.out.println(Thread.currentThread().getName()+"\t put 2");
+                System.out.println(Thread.currentThread().getName() + "\t put 2");
 
                 blockingQueue.put("3");
-                System.out.println(Thread.currentThread().getName()+"\t put 3");
+                System.out.println(Thread.currentThread().getName() + "\t put 3");
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-        },"AAA").start();
+        }, "AAA").start();
 
-        new Thread(()->{
+        new Thread(() -> {
             try {
                 TimeUnit.SECONDS.sleep(5);
-                System.out.println(Thread.currentThread().getName()+"\t"+blockingQueue.take());
+                System.out.println(Thread.currentThread().getName() + "\t" + blockingQueue.take());
 
                 TimeUnit.SECONDS.sleep(5);
-                System.out.println(Thread.currentThread().getName()+"\t"+blockingQueue.take());
+                System.out.println(Thread.currentThread().getName() + "\t" + blockingQueue.take());
 
                 TimeUnit.SECONDS.sleep(5);
-                System.out.println(Thread.currentThread().getName()+"\t"+blockingQueue.take());
+                System.out.println(Thread.currentThread().getName() + "\t" + blockingQueue.take());
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-        },"BBB").start();
+        }, "BBB").start();
     }
 }
