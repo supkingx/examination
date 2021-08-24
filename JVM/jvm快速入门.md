@@ -159,7 +159,6 @@ public class Test02 {
         System.out.println("sssss");
         fun1();
         System.out.println("uuuuuu");
-
     }
     public static void fun1(){
         fun1();
@@ -250,9 +249,9 @@ jdk7是Permanent Space，jdk8变成了metaspace，由于现在
 
 jdk7及之前版本的叫法，永久存储区是一个常驻内存区域，用于存放JDK自身携带的Class，被装载进此区域的数据是不会被垃圾回收器回收的，关闭JVM才会释放此区域所占用的内存。
 
-元空间和永久代最大的区别在于：永久带使用的是JVM的堆内存，而元空间使用的的本机的物理内存，因此默认情况下，元空间的大小仅受本地内存限制。类的元数据放入native momery，**字符串池和类的静态变量放入java堆中**，这样可以加载多少类的元数据就不再由MaxPermSize控制，而由系统的实际可用空间来控制。
+元空间和永久代最大的区别在于：永久带使用的是JVM的堆内存，而元空间使用的的本机的物理内存，因此默认情况下，元空间的大小仅受本地内存限制。类的元数据放入native momery，**字符串，常量池池和类的静态变量放入java堆中**，这样可以加载多少类的元数据就不再由MaxPermSize控制，而由系统的实际可用空间来控制。
 
-一般默认元空间只占用本机物理内存的1/4，
+一般默认元空间只占用本机物理内存的1/4。
 
 
 
@@ -289,7 +288,7 @@ TOTAL_MEMORY(-Xms) = 10485760(字节)、10.0MB
 MAX_MEMORY(-Xmx) = 10485760(字节)、10.0MB
 ```
 
-认为制造GC
+人为制造GC
 
 ```java
 public class Test01 {

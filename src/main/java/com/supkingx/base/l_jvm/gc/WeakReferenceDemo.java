@@ -15,15 +15,15 @@ import java.util.Map;
 public class WeakReferenceDemo {
     public static void main(String[] args) {
         Object o1 = new Object();
-        WeakReference<Object> objectSoftReference = new WeakReference<>(o1);
+        WeakReference<Object> weakReference = new WeakReference<>(o1);
         System.out.println(o1);
-        System.out.println(objectSoftReference.get());
+        System.out.println(weakReference.get());
 
         o1 = null;
         System.gc();
         System.out.println(o1);
-        // 内存不够用，会被回收
-        System.out.println(objectSoftReference.get());
+        // 会被回收
+        System.out.println(weakReference.get());
 
         Map<String, SoftReference<BitMap>> imageCache = new HashMap<>();
     }
