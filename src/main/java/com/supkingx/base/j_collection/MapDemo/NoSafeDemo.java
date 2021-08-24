@@ -11,7 +11,7 @@ import java.util.UUID;
  */
 public class NoSafeDemo {
     public static void main(String[] args) {
-        Map<Object, Object> map = new HashMap<>();
+        HashMap<Object, Object> map = new HashMap<>();
         for (int i = 0; i <= 30; i++) {
             new Thread(()->{
                 map.put(Thread.currentThread().getName(),UUID.randomUUID().toString().substring(0,9));

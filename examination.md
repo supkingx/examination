@@ -1,6 +1,4 @@
-# 
-
-一、java基础
+#  一、java基础
 
 参考 java基础.md
 
@@ -382,7 +380,7 @@ public class Son extends Father{
 
 调用顺序
 
-> 静态方法->父类被调用的静态方法->父类的静态代码块-->子类被调用的静态方法-->子类的静态代码块-->子类被调用的非静态方法-->父类的非静态代码块-->父类构造方法-->父类中被子类重写的方法（在这里就是指父类中的 int i = test();）-->子类的非静态代码块-->子类的构造方法
+> main方法->父类被调用的静态方法->父类的静态代码块-->子类被调用的静态方法-->子类的静态代码块-->子类被调用的非静态方法-->父类的非静态代码块-->父类构造方法-->父类中被子类重写的方法（在这里就是指父类中的 int i = test();）-->子类的非静态代码块-->子类的构造方法
 
 为什么（9）出现了两次？
 
@@ -1013,6 +1011,8 @@ semaphore可以控制并发数，设置最多3线程抢车位，抢到车位信�
 
 ## 6、lock
 
+<img src="examination.assets/image-20210812063525401.png" alt="image-20210812063525401" style="zoom:33%;" />
+
 详细介绍看后面的阻塞队列之消费者模式
 
 
@@ -1036,6 +1036,455 @@ SynchronousQueue
 ## 10、CopyOnWriteArraySet
 
 
+
+## 11、AbstractQueueSynchronizer之AQS
+
+### 1、LockSupport
+
+>  用于创建锁和其他同步类的基本线程阻塞原语。即线程等待唤醒机制（wait/notify的改良和加强版）
+>
+> Locksupport中的park()和unpark()的作用就是阻塞线程和解除线程阻塞。
+
+##### synchronized
+
+去掉synchronized后，wait/notify会报错
+
+将notify放在wait前面，wait的程序无法顺利执行
+
+##### lock
+
+去掉lock后，condition.await();和condition.signal();会报错
+
+把condition.signal放在condition.await();前面，await线程无法顺利执行
+
+#### LockSupport介绍
+
+LockSupport是用来创建锁和同步其他类的基本线程阻塞原语。
+
+LockSupport类使用了一种名为Permit(许可)的概念来做到阻塞和唤醒线程的功能，每个线程都有一个许可（permit），permit只有两个值1和0，默认是零。
+
+可以吧许可看成是一种（0,1）信号量（Semaphone），但与Semaphore不同的是，许可的累加上限是1。
+
+#### LockSupport的使用
+
+-  park()
+
+调用LockSupport.park()的时候，用的是系统原语（unsafe.part(false,0)）;
+
+permit一开始0，所以刚开始调用park()的时候，当前线程会阻塞，直到其他线程将当前线程的permit设置为1时，park方法会被唤醒，然后会将permit再次设置为0并返回。
+
+- unpark()
+
+调用LockSupport.unpark()的时候，用的是系统原语（unsafe.unpart(false,0)）;
+
+调用unpark()时，会将thread线程许可permit设置为1（注意多次调用unpark方法，不会累加，permit还是1）会唤醒之前阻塞（unpark）的线程。
+
+1、**park和unpark可以直接使用**，不需要像synchronized和lock那样使用锁，代码如下
+
+```java
+public static void main(String[] args) throws InterruptedException {
+        Thread aa = new Thread(() -> {
+            System.out.println(Thread.currentThread().getName() + "\t我来了");
+            LockSupport.park();
+            System.out.println(Thread.currentThread().getName() + "\t被叫醒");
+        }, "AA");
+        aa.start();
+
+        Thread.sleep(1000);
+
+        Thread bb = new Thread(() -> {
+            LockSupport.unpark(aa);
+            System.out.println(Thread.currentThread().getName() + "\t叫醒你");
+        }, "BB");
+        bb.start();
+    }
+```
+
+2、unpark可以在park之前使用，如果先用了unpark再使用park，那park将不会起作用，代码会直接执行下去，因为park此时是正常消费，将permit从1变成0。这比synchronized和lock强大。
+
+#### 总结
+
+<img src="examination.assets/image-20210812071841863.png" alt="image-20210812071841863" style="zoom:50%;" />
+
+为什么唤醒两次之后阻塞两次，但是最终结果还是会阻塞？
+
+因为permit最多一个，连续两次unpark之后，permit还是1，两次park之后，第一个park将permit从1变成0，第二个park拿到的permit就是0，此时就会阻塞。
+
+### 2、AQS解读
+
+> 抽象的队列容器，用来构建锁或者其他同步器组件的重量级基础框架级整个JUC体系的基石，通过内置的FIFO队列来完成资源获取线程的排队工作，并通过一个int类型变量表示持有锁的状态。，int是0：说明没有人抢到锁，如果int是1：说明有人在持有锁，其他没抢到锁的将会放到队列中等待。
+>
+> <img src="examination.assets/image-20210812073601714.png" alt="image-20210812073601714" style="zoom:50%;" />
+
+上面官方介绍的白话文版本：
+
+<img src="examination.assets/image-20210812075252247.png" alt="image-20210812075252247" style="zoom:33%;" />
+
+
+
+模板设计模式，一般是定义一个足够高的父类abstract，供大家调用。
+
+首先找到AQS，如下
+
+<img src="examination.assets/image-20210812072819304.png" alt="image-20210812072819304" style="zoom:33%;" />
+
+<img src="examination.assets/image-20210812072840516.png" alt="image-20210812072840516" style="zoom:33%;" />
+
+### 3、AQS相关的的类
+
+reentrantLock、CountDownLatch、ReentrantReadWriteLock、Semaphore。。。。。。可以点进去看下源码，都是一个Sync继承了AQS
+
+锁，面向锁的使用者，
+
+同步器，面向锁的实现者。（比如java并发大神DougLee，提出了统一规范并简化了锁的实现，屏蔽了同步状态管理、阻塞线程排队和通知、唤醒机制等）
+
+<img src="examination.assets/image-20210812074534245.png" alt="image-20210812074534245" style="zoom:50%;" />
+
+### 4、AQS干什么事情
+
+1、加锁会阻塞：有阻塞就需要排队，实现排队必然需要有某种形式。
+
+<img src="examination.assets/image-20210812074946384.png" alt="image-20210812074946384" style="zoom:50%;" />
+
+<img src="examination.assets/image-20210812075029749.png" alt="image-20210812075029749" style="zoom:50%;" />
+
+Node:就是一个内部类，java.util.concurrent.locks.AbstractQueuedSynchronizer.Node。
+
+### 5、源码解读
+
+> AQS简单理解为state变量+CLH双端队列
+
+<img src="examination.assets/image-20210812080442663.png" alt="image-20210812080442663" style="zoom:33%;" />
+
+<img src="examination.assets/image-20210812075347938.png" alt="image-20210812075347938" style="zoom:33%;" />
+
+<img src="examination.assets/image-20210812080031072.png" alt="image-20210812080031072" style="zoom:33%;" />
+
+#### （1）state线程同步状态
+
+```java
+  /**
+     * The synchronization state.
+     */
+    private volatile int state;
+```
+
+state=0，无需等待，直接处理，state=1，有人抢占，需要等待。
+
+#### （2）CLH队列，是一个双向队列
+
+
+
+#### （3）Node
+
+node里装的是实现
+
+node的int变量，node的等待状态waitState变量
+
+```java
+volatile int waitStatus;
+```
+
+等候区其他线程的等待状态，队列中每个排队的个体就是一个Node
+
+<img src="examination.assets/image-20210812081040084.png" alt="image-20210812081040084" style="zoom:33%;" />
+
+<img src="examination.assets/image-20210812081058942.png" alt="image-20210812081058942" style="zoom:33%;" />
+
+
+
+
+
+
+
+总结
+
+<img src="examination.assets/image-20210812081254397.png" alt="image-20210812081254397" style="zoom:33%;" />
+
+<img src="examination.assets/image-20210812081341049.png" alt="image-20210812081341049" style="zoom:33%;" />
+
+### 6、从ReentrantLock开始解读
+
+> reentrant的加锁过程分为三个阶段：
+>
+> 1、尝试加锁，2、加锁失败，线程进入队列，3、线程进入队列之后，进入阻塞状态
+
+Lock接口的实现类，基本都是通过【聚合】了一个【队列同步器】的子类完成线程访问控制的。
+
+看下RenentrantLock的源码
+
+<img src="examination.assets/image-20210812233332569.png" alt="image-20210812233332569" style="zoom:25%;" />
+
+<img src="examination.assets/image-20210812233402917.png" alt="image-20210812233402917" style="zoom:35%;" />
+
+<img src="examination.assets/image-20210812233438408.png" alt="image-20210812233438408" style="zoom:30%;" />
+
+可见，其实RenentrantLock的lock是调用了sync的lock，二sync是AbstractQueueSynchronizer的子类。
+
+<img src="examination.assets/image-20210812234340726.png" alt="image-20210812234340726" style="zoom:33%;" />
+
+<img src="examination.assets/image-20210812234355236.png" alt="image-20210812234355236" style="zoom:33%;" />
+
+NonfairSync和FairSync也都是继承了Sync。
+
+公平和非公平的代码如下
+
+```java
+// 公平锁 tryAcquire 尝试抢占
+static final class FairSync extends Sync {
+        private static final long serialVersionUID = -3000897897090466540L;
+
+        final void lock() {
+            acquire(1);
+        }
+
+        /**
+         * Fair version of tryAcquire.  Don't grant access unless
+         * recursive call or no waiters or is first.
+         */
+        protected final boolean tryAcquire(int acquires) {
+            final Thread current = Thread.currentThread();
+            int c = getState();
+            if (c == 0) {
+                if (!hasQueuedPredecessors() &&
+                    compareAndSetState(0, acquires)) {
+                    setExclusiveOwnerThread(current);
+                    return true;
+                }
+            }
+            else if (current == getExclusiveOwnerThread()) {
+                int nextc = c + acquires;
+                if (nextc < 0)
+                    throw new Error("Maximum lock count exceeded");
+                setState(nextc);
+                return true;
+            }
+            return false;
+        }
+    }
+
+```
+
+```java
+  
+ // 非公平的， 抢占是 nonfairTryAcquire，非公平抢占
+static final class NonfairSync extends Sync {
+        private static final long serialVersionUID = 7316153563782823691L;
+
+        /**
+         * Performs lock.  Try immediate barge, backing up to normal
+         * acquire on failure.
+         */
+        final void lock() {
+            if (compareAndSetState(0, 1))
+                setExclusiveOwnerThread(Thread.currentThread());
+            else
+                acquire(1);
+        }
+
+        protected final boolean tryAcquire(int acquires) {
+            return nonfairTryAcquire(acquires);
+        }
+    }
+
+// nonfairTryAcquire的实现如下
+ abstract static class Sync extends AbstractQueuedSynchronizer {
+        private static final long serialVersionUID = -5179523762034025860L;
+
+        /**
+         * Performs {@link Lock#lock}. The main reason for subclassing
+         * is to allow fast path for nonfair version.
+         */
+        abstract void lock();
+
+        /**
+         * Performs non-fair tryLock.  tryAcquire is implemented in
+         * subclasses, but both need nonfair try for trylock method.
+         */
+        final boolean nonfairTryAcquire(int acquires) {
+            final Thread current = Thread.currentThread();
+            int c = getState();
+            if (c == 0) {
+                if (compareAndSetState(0, acquires)) {
+                    setExclusiveOwnerThread(current);
+                    return true;
+                }
+            }
+            else if (current == getExclusiveOwnerThread()) {
+                int nextc = c + acquires;
+                if (nextc < 0) // overflow
+                    throw new Error("Maximum lock count exceeded");
+                setState(nextc);
+                return true;
+            }
+            return false;
+        }
+```
+
+<img src="examination.assets/image-20210813001902189.png" alt="image-20210813001902189" style="zoom:50%;" />
+
+<img src="examination.assets/image-20210813002332873.png" alt="image-20210813002332873" style="zoom:33%;" />
+
+<img src="examination.assets/image-20210813003131573.png" alt="image-20210813003131573" style="zoom:33%;" />
+
+#### 分析一下非公平
+
+lock()、acquire()、tryAcquire、addWaiter、acquireQueued(addWaiter(Node.EXCLUSIVE),arg)
+
+##### 以下假如两个线程同时使用lock
+
+```java
+static final class NonfairSync extends Sync {
+		// 看下state是不是0，是0的话就将AQS的state设置成1，然后设置下安全线程
+        final void lock() {
+          // 第一个线程抢占了
+            if (compareAndSetState(0, 1))
+                setExclusiveOwnerThread(Thread.currentThread());
+            else
+              // 第二个线程只能用这个
+                acquire(1);
+        }
+  。。。。。。
+ public final void acquire(int arg) {
+        if (!tryAcquire(arg) &&
+            // addWaiter即入队了 （addWaiter）代码在后面
+            acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
+            selfInterrupt();
+    }
+  。。。。。。。。
+    
+  final boolean nonfairTryAcquire(int acquires) {
+            final Thread current = Thread.currentThread();
+            int c = getState();
+     // 二号线程进来这里，c=1
+            if (c == 0) {
+                if (compareAndSetState(0, acquires)) {
+                    setExclusiveOwnerThread(current);
+                    return true;
+                }
+            }
+     // 二号线程进来这里，getExclusiveOwnerThread是一号线程的值（彩蛋，这个代码是不是类似于可重入锁，线程相等的话就直接进入）
+            else if (current == getExclusiveOwnerThread()) {
+                int nextc = c + acquires;
+                if (nextc < 0) // overflow
+                    throw new Error("Maximum lock count exceeded");
+                setState(nextc);
+                return true;
+            }
+    // 二号线程进来这里,返回false
+            return false;
+        }
+```
+
+addWait()，二号线程在这里完成入队
+
+```java
+private Node addWaiter(Node mode) {
+        Node node = new Node(Thread.currentThread(), mode);
+        // Try the fast path of enq; backup to full enq on failure
+        Node pred = tail;
+        if (pred != null) {
+            node.prev = pred;
+            if (compareAndSetTail(pred, node)) {
+                pred.next = node;
+                return node;
+            }
+        }
+        enq(node);
+        return node;
+    }
+
+private Node enq(final Node node) {
+  // 自旋
+        for (;;) {
+            Node t = tail;
+            if (t == null) { // Must initialize
+              // 可以看到第一个节点不是 第二个线程，是一个空的傀儡节点
+                if (compareAndSetHead(new Node()))
+                    tail = head;
+            } else {
+              // 这里设置队列的第二个节点，这才是第二个线程B
+                node.prev = t;
+                if (compareAndSetTail(t, node)) {
+                    t.next = node;
+                    return t;
+                }
+            }
+        }
+    }
+```
+
+即，当二号线程 第一次来等候区时，队列是 头结点-->空节点-->二号线程，假如有第三个线程进来，则直接就可以接在二号线程后面等待。
+
+二号线程入队后会再抢一次
+
+```
+acquireQueued
+```
+
+<img src="examination.assets/image-20210813081613822.png" alt="image-20210813081613822" style="zoom:33%;" />
+
+关注上面的parkAndCheckInterrupt，二号线程在这里被阻塞，
+
+```java
+private final boolean parkAndCheckInterrupt() {
+        LockSupport.park(this);
+        return Thread.interrupted();
+    }
+```
+
+##### 下面看下unlock
+
+```java
+// 还是用的sync(继承了AQS)
+public void unlock() {
+        sync.release(1);
+    }
+// 尝试解锁
+public final boolean release(int arg) {
+        if (tryRelease(arg)) {
+            Node h = head;
+            if (h != null && h.waitStatus != 0)
+                unparkSuccessor(h);
+            return true;
+        }
+        return false;
+    }
+
+protected final boolean tryRelease(int releases) {
+             // 1-1 = 0
+            int c = getState() - releases;
+            if (Thread.currentThread() != getExclusiveOwnerThread())
+                throw new IllegalMonitorStateException();
+            boolean free = false;
+            if (c == 0) {
+                free = true;
+                // 设置当前线程是null
+                setExclusiveOwnerThread(null);
+            }
+            // 将标志位置为0
+            setState(c);
+            return free;
+        }
+```
+
+底层用LockSupport.unpark(s.thread);
+
+<img src="examination.assets/image-20210813083111833.png" alt="image-20210813083111833" style="zoom:33%;" />
+
+
+
+总结
+
+<img src="examination.assets/image-20210813084749630.png" alt="image-20210813084749630" style="zoom:33%;" />
+
+再次看到开头的图
+
+<img src="examination.assets/image-20210812075029749.png" alt="image-20210812075029749" style="zoom:50%;" />
+
+
+
+<img src="examination.assets/image-20210812074946384.png" alt="image-20210812074946384" style="zoom:50%;" />
 
 
 
@@ -1645,6 +2094,10 @@ sync = fair ? new FairSync() : new NonfairSync();
 
 是指多个线程按照申请锁的顺序来获取锁，类似于排队，先来后到。
 
+讲究先来后到，线程在获取锁的时候，如果这个锁的等待队列中已经有线程在等待了，那么当前线程就会进入等待队列中。
+
+
+
 
 
 **非公平锁**
@@ -1718,6 +2171,52 @@ t2------sendEmail()
 分析：
 
 t1线程在外层方法获取锁的时候，t1在进入内层方法会自动获取锁
+
+
+
+再次证明，同一个线程可以多次获得自己的同一把锁
+
+```java
+public class ReentrantLockDemo3 {
+    static Object object = new Object();
+    public static void main(String[] args) {
+        for (int i = 0; i < 10; i++) {
+            m1();
+        }
+    }
+
+    public static void m1() {
+        new Thread(() -> {
+            synchronized (object) {
+                System.out.println(Thread.currentThread().getName() + "\t" + "-------外层调用");
+                synchronized (object) {
+                    System.out.println(Thread.currentThread().getName() + "\t" + "--------中层调用");
+                    synchronized (object) {
+                        System.out.println(Thread.currentThread().getName() + "\t----------内层调用");
+                    }
+                }
+            }
+        }, "t1").start();
+    }
+}
+
+输出：
+t1	-------外层调用
+t1	--------中层调用
+t1	----------内层调用
+t1	-------外层调用
+t1	--------中层调用
+t1	----------内层调用
+t1	-------外层调用
+t1	--------中层调用
+t1	----------内层调用
+t1	-------外层调用
+t1	--------中层调用
+t1	----------内层调用
+t1	-------外层调用
+t1	--------中层调用
+t1	----------内层调用
+```
 
 
 
@@ -1799,7 +2298,9 @@ private void get() {
 
 优点：避免死锁
 
-怎么避免死锁的，只要开一道锁，就能一马平川（因为拿到一个锁就等于拿到的方法内部的所有锁）
+怎么避免死锁的，只要开一道锁，就能一马平川（因为只要是同一把锁，拿到锁之后不需要释放，能接着继续拿锁），一个线程可以多次获得自己的同一把锁
+
+
 
 ## 3、自旋锁
 

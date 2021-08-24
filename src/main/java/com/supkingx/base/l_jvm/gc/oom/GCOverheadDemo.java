@@ -11,13 +11,17 @@ import java.util.ArrayList;
  * @Date: 2021/7/31
  */
 public class GCOverheadDemo {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         int i = 0;
         ArrayList<Object> list = new ArrayList<>();
         try {
             while (true){
                 // TODO 记得关注 https://www.runoob.com/java/java-string-intern.html
                 list.add(String.valueOf(++i).intern());
+                if(i==100){
+                    Thread.sleep(10000000);
+                }
+                Thread.sleep(1);
             }
         }catch (Throwable e){
             System.out.println("***************i:"+i);

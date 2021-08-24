@@ -56,8 +56,10 @@ double型比float型存储范围更大，精度更高，所以通常的浮点型
 
 这个类型只有两个值，true和false（真和非真）
 
-- boolean t = true；
+- boolean t = true；在编译的时候使用的是int类型，所以占4个字节
 - boolean f = false；
+
+Boolean[] b = new boolean[10]，是数组的时候，编译是作为byte array来编译的，所以数组里每个元件占一个字节
 
 #### 文本型
 
@@ -71,9 +73,100 @@ char c = ' 1 ';
 
 结果却变成了49。
 
+#### int和Integer的区别
+
+1、Integer是int的包装类，int则是java的一种基本数据类型 
+2、Integer变量必须实例化后才能使用，而int变量不需要 
+3、Integer实际是对象的引用，当new一个Integer时，实际上是生成一个指针指向此对象；而int则是直接存储数据值 
+4、Integer的默认值是null，int的默认值是0
 
 
-### 1.2、考虑输出结果
+
+### 1.2 面向对象三大特征
+
+#### （1）封装
+
+封装（Encapsulation）是面向对象的三大特征之一（另外两个是继承和多态），它指的是将对象的状态信息隐藏在对象内部，不允许外部程序直接访问对象内部信息，而是通过该类所提供的方法来实现对内部信息的操作和访问。
+
+#### （2）继承
+
+- Java 使用 extends 作为继承的关键字，子类扩展了父类，获得父类的全部成员变量和方法。
+- Java 只能单继承，只有一个直接父类，但可以有无限多个间接父类。当一个 Java 类并未显式指定直接父类时，默认继承 `java.lang.Object` ，因此 `java.lang.Object` 是所有类的直接或间接父类。
+
+##### 重写
+
+重写父类方法应遵循 “两同两小一大“ 规则：
+
+- “两同” 指方法名相同、形参列表相同；
+- “两小” 指子类方法返回值类型和抛出的异常类型应比父类方法的更小或相等；
+- “一大” 指的是子类方法的访问权限应比父类方法的访问权限更大或相等。
+
+```
+class B {
+    public void show() {
+        System.out.println("B");
+    }
+}
+
+public class A extends B{
+    @Override
+    public void show() {
+        System.out.println("A");  //重写父类方法
+    }
+}
+```
+
+重载（Overload）和重写（Override）区别：
+
+- 重载指的是同一类中多个同名方法；
+- 重写指的是子类和父类的同名方法。
+
+##### suer关键字
+
+- 访问父类的构造函数：可以使用 super() 函数访问父类的构造函数，从而委托父类完成一些初始化的工作；
+- 访问父类的成员：如果子类重写了父类的某个方法，可以通过使用 super 关键字来引用父类的方法实现。
+
+##### 父类构造器
+
+子类继承了父类的全部变量和方法，所以实例化子类时，必须先将其父类实例化。调用父类构造器的方式是 super()，参数为父类构造器所需参数。使用 super 调用父类构造器必须出现放在子类构造器的第一行，而 this 调用同一个类中重载的构造器也要放在第一行，所以 super() 和 this() 不能同时出现。
+
+不管是否使用 super 显式调用父类构造器，子类构造器总会调用父类构造器一次，总共会出现三种情况：
+
+- 子类构造器第一行使用 super 显式调用父类构造器；
+- 子类构造器第一行使用 this 调用重载的子类构造器，在本类重载的构造器中调用父类构造器；
+- 子类构造器第一行既没有 super 调用，也没有 this 调用，系统在第一行隐私调用父类无参构造器。
+
+#### （3）多态
+
+多态：相同类型的变量调用同一个方法时呈现出多种不同的行为特征。
+
+例如，Person extends Creature；Dog extends Creature，都继承了父类的eat()方法
+
+Creature person = new Person();
+
+Creature dog = new Dog();
+
+person.eat()和dog.eat() 就不一样。这就是多态，同一个方法时呈现出多种不同的行为特征。
+
+
+
+### 1.5 访问控制符
+
+- private（当前类访问权限）：类中的一个的成员被 private 修饰，它只能在当前类的内部被访问；
+- default（包访问权限）：类中的一个成员或者一个外部类不使用任何访问控制符修饰，它能被当前包下其他类访问；
+- protected（子类访问权限）：类中的一个的成员被 protected 修饰，它既可以被当前包下的其他类访问，又可以被不同包的子类访问；
+- public（公共访问权限）：类中的一个成员或者一个外部类使用 public 修饰，它能被所有类访问。
+
+|  private   | default | protected | public |      |
+| :--------: | :-----: | :-------: | :----: | ---- |
+| 同一个类中 |    ✔    |     ✔     |   ✔    | ✔    |
+| 同一个包中 |         |     ✔     |   ✔    | ✔    |
+|   子类中   |         |           |   ✔    | ✔    |
+| 全局范围内 |         |           |        | ✔    |
+
+
+
+### 1.4、考虑输出结果
 
 视频资料：https://www.bilibili.com/video/BV1Eb411P7bP?t=46
 
@@ -218,6 +311,49 @@ public class NoSafeDemo {
     }
 }
 ```
+
+报错位置如下，可知
+
+- modCount是ArrayList中的一个成员变量。它表示该集合实际被修改的次数
+
+- expectedModCount 是 ArrayList中的一个内部类——**Itr中的成员变量**。expectedModCount表示这个迭代器期望该集合被修改的次数。其值是在ArrayList.iterator方法被调用的时候初始化的。只有通过迭代器对集合进行操作，该值才会改变。
+
+A线程 add走到checkForComodification()的时候，B线程刚add改变了modCount的值，就会出现modCount != expectedModCount
+
+```java
+final void checkForComodification() {
+    if (modCount != expectedModCount)
+        throw new ConcurrentModificationException();
+}
+
+private class Itr implements Iterator<E> {
+        int cursor;       // index of next element to return
+        int lastRet = -1; // index of last element returned; -1 if no such
+  
+  // =========关注这里
+        int expectedModCount = modCount;
+
+        Itr() {}
+
+        public boolean hasNext() {
+            return cursor != size;
+        }
+
+        @SuppressWarnings("unchecked")
+        public E next() {
+            checkForComodification();
+            int i = cursor;
+            if (i >= size)
+                throw new NoSuchElementException();
+            Object[] elementData = ArrayList.this.elementData;
+            if (i >= elementData.length)
+                throw new ConcurrentModificationException();
+            cursor = i + 1;
+            return (E) elementData[lastRet = i];
+        }
+```
+
+
 
 ##### 变成线程安全
 
@@ -413,6 +549,8 @@ public class SafeDemo {
 
 2、使用Collections.synchronizedMap
 
+put加了互斥锁
+
 ```java
 public class SafeDemo2 {
     public static void main(String[] args) {
@@ -427,7 +565,35 @@ public class SafeDemo2 {
 }
 ```
 
+#### (2)基本概念介绍
 
+> HashMap基于哈希表的Map接口实现，是以key-value存储形式存在，即主要用来存放键值对。HashMap 的实现不是同步的，这意味着它不是线程安全的。它的key、value都可以为null。此外，HashMap中的映射不是有序的。
+>
+> ​	JDK1.8 之前 HashMap 由 数组+链表 组成的，数组是 HashMap 的主体，链表则是主要为了解决哈希冲突**(两个对象调用的hashCode方法计算的哈希码值一致导致计算的数组索引值相同)**而存在的（“拉链法”解决冲突）.JDK1.8 以后在解决哈希冲突时有了较大的变化，**当链表长度大于阈值（或者红黑树的边界值，默认为 8）并且当前数组的长度大于64时，此时此索引位置上的所有数据改为使用红黑树存储。**
+>
+> 补充：将链表转换成红黑树前会判断，即使阈值大于8，但是数组长度小于64，此时并不会将链表变为红黑树。而是选择进行数组扩容。
+>
+> 这样做的目的是因为数组比较小，尽量避开红黑树结构，这种情况下变为红黑树结构，反而会降低效率，因为红黑树需要进行左旋，右旋，变色这些操作来保持平衡 。同时数组长度小于64时，搜索时间相对要快些。所以综上所述为了提高性能和减少搜索时间，底层在阈值大于8并且数组长度大于64时，链表才转换为红黑树。具体可以参考 `treeifyBin`方法。
+>
+> 当然虽然增了红黑树作为底层数据结构，结构变得复杂了，但是阈值大于8并且数组长度大于64时，链表转换为红黑树时，效率也变的更高效。
+
+小结：
+
+特点：
+
+1.存取无序的
+
+2.键和值位置都可以是null，但是键位置只能是一个null
+
+3.键位置是唯一的，底层的数据结构控制键的
+
+4.jdk1.8前数据结构是：链表 + 数组  jdk1.8之后是 ： 链表 + 数组  + 红黑树
+
+5.阈值(边界值) > 8 并且数组长度大于64，才将链表转换为红黑树，变为红黑树的目的是为了高效的查询。
+
+详细介绍参考
+
+HashMap专题
 
 
 
@@ -523,18 +689,12 @@ public CopyOnWriteArraySet() {
 
 
 
-
-
-
-
-
-
 ## 3、反射
 
 ### (1) 概述
 
 - 反射被视为动态语言的关键，反射机制允许程序在执行期间借助于Reflection API取得任何类的内部信息，并能直接操作任意对象的内部属性及方法。
-- 加载完类后，在堆内存的方法区中就会产生一个CLass类型的对象，这个对象就包含了类的结构信息。我们可以通过这个对象看到类的结构。这个对象就像一面镜子，透过这个镜子看到类的结构，所以，我们形象的称之为：反射。
+- 加载完类后，在堆内存的方法区(MetaSpace)中就会产生一个CLass类型的对象，这个对象就包含了类的结构信息。我们可以通过这个对象看到类的结构。这个对象就像一面镜子，透过这个镜子看到类的结构，所以，我们形象的称之为：反射。
 
 <img src="../examination.assets/image-20210718134310333.png" alt="image-20210718134310333" style="zoom:33%;" />
 
@@ -813,6 +973,10 @@ public class ConstructorTest {
 ### (8)总结：
 
 关注上面几个需要掌握的内容
+
+加了declared就是获取本类的所有方法，包含私有，如果要多私有Field设置参数，需要Field.setAccessible(true)
+
+没有加declared就是获取包含父类的所有公开方法
 
 
 
@@ -1699,6 +1863,8 @@ public class ServerDemo {
 
 ## 12、多线程
 
+### 创建线程池的方式
+
 1、固定大小线程池
 
 缺点，阻塞队列无限大  LinkedBlockingQueue()  Integer.MAX_VALUE
@@ -1747,5 +1913,46 @@ Executors.newCachedThreadPool()
                 new LinkedBlockingDeque<>(3),
                 new ThreadFactoryBuilder().setNameFormat("testThread-%d").setDaemon(true).build(),
                 new ThreadPoolExecutor.DiscardPolicy());
+```
+
+### 线程的生命周期
+
+线程的生命周期包含5个阶段，包括：新建、就绪、运行、阻塞、销毁。
+
+- 新建：就是刚使用new方法，new出来的线程；
+- 就绪：就是调用的线程的start()方法后，这时候线程处于等待CPU分配资源阶段，谁先抢的CPU资源，谁开始执行;
+- 运行：当就绪的线程被调度并获得CPU资源时，便进入运行状态，run方法定义了线程的操作和功能;
+- 阻塞：在运行状态的时候，可能因为某些原因导致运行状态的线程变成了阻塞状态，比如sleep()、wait()之后线程就处于了阻塞状态，这个时候需要其他机制将处于阻塞状态的线程唤醒，比如调用notify或者notifyAll()方法。唤醒的线程不会立刻执行run方法，它们要再次等待CPU分配资源进入运行状态;
+- 销毁：如果线程正常执行完毕后或线程被提前强制性的终止或出现异常导致结束，那么线程就要被销毁，释放资源;
+
+线程池的一个作用就是节省了新生，就绪，阻塞，
+
+### 线程的拒绝策略
+
+- abortPolicy
+
+```
+这种拒绝策略在拒绝任务时，会直接抛出一个类型为 RejectedExecutionException 的 RuntimeException，让你感知到任务被拒绝了，于是你便可以根据业务逻辑选择重试或者放弃提交等策略。
+```
+
+- DiscardPolicy
+
+```
+这种拒绝策略正如它的名字所描述的一样，当新任务被提交后直接被丢弃掉，也不会给你任何的通知，相对而言存在一定的风险，因为我们提交的时候根本不知道这个任务会被丢弃，可能造成数据丢失。
+```
+
+- DiscardOldestPolicy
+
+```
+如果线程池没被关闭且没有能力执行，则会丢弃任务队列中的头结点，通常是存活时间最长的任务，这种策略与第二种不同之处在于它丢弃的不是最新提交的，而是队列中存活时间最长的，这样就可以腾出空间给新提交的任务，但同理它也存在一定的数据丢失风险。
+```
+
+- CallerRunsPolicy
+
+```
+相对而言它就比较完善了，当有新任务提交后，如果线程池没被关闭且没有能力执行，则把这个任务交于提交任务的线程执行，也就是谁提交任务，谁就负责执行任务。这样做主要有两点好处。
+
+第一点新提交的任务不会被丢弃，这样也就不会造成业务损失。
+第二点好处是，由于谁提交任务谁就要负责执行任务，这样提交任务的线程就得负责执行任务，而执行任务又是比较耗时的，在这段期间，提交任务的线程被占用，也就不会再提交新的任务，减缓了任务提交的速度，相当于是一个负反馈。在此期间，线程池中的线程也可以充分利用这段时间来执行掉一部分任务，腾出一定的空间，相当于是给了线程池一定的缓冲期.
 ```
 
